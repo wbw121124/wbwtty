@@ -4,14 +4,14 @@
 
 ## 当前 Git 状态
 
-- 当前分支：main（阶段 1 经 `feature/vt-parser`、`feature/pty-core` 分支开发后合并）
-- 最近提交：阶段 1 `feat: implement vt-parser terminal state machine` → `feat: add pty-core PTY abstraction, registry and C ABI` → `feat: add pty-unix POSIX PTY backend` → 合并提交（精确哈希见 `git log`）
-- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`（阶段 1 合并提交上，见 plan.md 进度日志）
-- 待合并分支：（无）
+- 当前分支：`feature/term-input`（阶段 2 开发中；main 停在 v0.2.0-stage1 合并提交）
+- 最近提交：`feat: add term-input VT sequence encoder` → `test: add term-input integration tests` → `docs: add term-input module README`（精确哈希见 `git log`）
+- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`
+- 待合并分支：`feature/term-input`
 
 ## 当前阶段
 
-**阶段 1 完成（v0.2.0-stage1）**，进入阶段 2：term-input + term-render-gtk（前置 MSYS2 → D:\msys）。
+**阶段 2 进行中**：MSYS2 → `D:\msys` ✅、term-input ✅（17 测试）、term-render-gtk 进行中。
 
 ## 模块划分（计划）
 
@@ -22,9 +22,9 @@
 | pty-unix | openpty/forkpty 后端（Linux/macOS） | ✅ 阶段 1（POSIX 实现；Windows 空壳；unix 测试由 CI 执行） |
 | pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | 未开始（阶段 3） |
 | pty-win10-early | 1809 前桥接：控制台 API 直驱 / Cygwin PTY / WinPTY 回退 | 未开始（阶段 4） |
-| term-render-gtk | GTK3+Cairo/OpenGL 渲染 | 未开始（阶段 2） |
+| term-render-gtk | GTK3+Cairo/OpenGL 渲染 | 进行中（阶段 2） |
 | term-render-qt | Qt 渲染（可选，backlog） | backlog |
-| term-input | 键鼠事件 → VT 序列编码（纯函数） | 未开始（阶段 2） |
+| term-input | 键鼠事件 → VT 序列编码（纯函数） | ✅ 阶段 2（11 单元 + 6 集成测试） |
 | term-app | 组装示例主程序 | 未开始（阶段 2 起） |
 
 ## 已完成任务（阶段 0）
@@ -65,19 +65,30 @@
    x86_64-unknown-linux-gnu --all-targets`）+ 自动运行 pipe_mvp；`x86_64-apple-darwin` 亦 check 通过
 7. 模块 README（vt-parser/pty-core/pty-unix）+ 本机 ci-local 全绿（80 测试）
 
-## 下一步（阶段 2 待办）
+## 下一步（阶段 2）
 
-1. MSYS2 安装到 `D:\msys`（ucrt64 + GTK3 开发包）
-2. `term-input`：键/鼠/滚轮/paste → VT 序列（修饰键、application keypad、SGR mouse、bracketed paste）
+1. ~~MSYS2 安装到 `D:\msys`~~ ✅（ucrt64；见下方"MSYS2 环境"）
+2. ~~`term-input`：键/鼠/滚轮/paste → VT 序列~~ ✅（11 单元 + 6 集成测试）
 3. `term-render-gtk`：GTK3+Cairo，damage 驱动重绘、字形缓存、真彩色、光标、resize 联动
+   （依赖 Rust(gnu) ↔ ucrt64 链接实测）
 4. 各模块 README + 测试 → 标签 `v0.3.0-stage2`
+
+## MSYS2 环境（阶段 2 前置，2026-10-03 完成）
+
+- 安装：`D:\msys`（非管理员静默 `in --root D:\msys`）；安装器
+  `msys2-x86_64-latest.exe`（GitHub nightly-x86_64 资产，85047704 B，
+  SHA-256 `7CCD43DE6EBA7ADB6686E50B5D053C848EF14D53BC66FB84C6C70EF2DF6B5B7E`）→ `D:\temp\msys2-installer.exe`
+- **包命名已重构**：`mingw-w64-ucrt64-*` → `mingw-w64-ucrt-x86_64-*`（旧名报"未找到目标"）
+- 已装：`mingw-w64-ucrt-x86_64-toolchain`（gcc 16.2.0）+ `-gtk3`（3.24.52，85 包/1.26GB）+ `-pkgconf`
+- 验证：`D:\msys\ucrt64\bin\gcc.exe --version`、`pkg-config --modversion gtk+-3.0` = 3.24.52
+- 用法：构建时 PATH 前置 `D:\msys\ucrt64\bin`（gcc/pkg-config/GTK DLL），代理 env 供 pacman
 
 ## 已知问题 / 阻塞
 
 - 本机无 MSVC/Windows SDK → per-SDK 编译由 CI（windows-latest + ilammy/msvc-dev-cmd）承担；
   本机 `scripts/ci-local.ps1` 在 cl 不在 PATH 时自动跳过该步（已决策）
 - 本机无 gh CLI 且未认证 → 创建 GitHub 远端仓库需要一次用户认证（device flow 或 GH_TOKEN）
-- MSYS2（D:\msys）尚未安装 → 阶段 2 前完成
+- ~~MSYS2（D:\msys）尚未安装~~ ✅ 已完成（2026-10-03，见"MSYS2 环境"）
 - 本机 Rust host 为 x86_64-pc-windows-gnu（无 MSVC 工具链），GTK 链接方案阶段 2 实测
 - `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行；
   本机以 linux 目标 `cargo check --all-targets` 把编译关（ci-local 步骤 4b）

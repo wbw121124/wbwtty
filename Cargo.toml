@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/vt-parser", "crates/pty-core", "crates/pty-unix"]
+members = [".", "crates/vt-parser", "crates/pty-core", "crates/pty-unix", "crates/term-input"]
 resolver = "2"
 
 [workspace.package]
