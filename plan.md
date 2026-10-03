@@ -1,7 +1,7 @@
 # plan.md — 跨平台终端框架实施计划
 
 - 最近更新：2026-10-03
-- 当前阶段：**阶段 0 完成（v0.1.0-stage0）→ 阶段 1 进行中**
+- 当前阶段：**阶段 1 完成（v0.2.0-stage1）→ 阶段 2 待开始**
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -69,14 +69,14 @@ F:\wbwtty\
 验收：7 版头文件齐备且裁剪入库；矩阵覆盖规格点名的全部拦截函数；
 白名单机读+人读齐套；CI 配置齐全；标签与提交符合规范。
 
-### 阶段 1：vt-parser + pty-core + pty-unix + 管道 MVP（1-2 周）— 当前
-- [ ] vt-parser：UTF-8 增量解码、ESC/CSI/OSC/DCS、SGR 真彩色、光标/擦除/滚动区/alt-screen、
+### 阶段 1：vt-parser + pty-core + pty-unix + 管道 MVP（1-2 周）— 完成
+- [x] vt-parser：UTF-8 增量解码、ESC/CSI/OSC/DCS、SGR 真彩色、光标/擦除/滚动区/alt-screen、
       鼠标模式 1000/1002/1003/1006、bracketed paste、宽字符、滚动缓冲、行级 damage；feed()/get_screen()
-- [ ] pty-core：trait Pty{spawn/read/write/resize/send_signal/close} + Signal + 后端选择 + C ABI 头
-- [ ] pty-unix：forkpty + TIOCSWINSZ + 作业控制（CI ubuntu/macos 执行测试）
-- [ ] 管道 MVP：examples/pipe_mvp.rs 匿名管道启动 python → 喂 vt-parser → 断言屏幕
-- [ ] 各模块 README + 测试
-- [ ] 标签 **v0.2.0-stage1**
+- [x] pty-core：trait Pty{spawn/read/write/resize/send_signal/close} + Signal + 后端选择 + C ABI 头
+- [x] pty-unix：forkpty + TIOCSWINSZ + 作业控制（CI ubuntu/macos 执行测试）
+- [x] 管道 MVP：examples/pipe_mvp.rs 匿名管道启动 python → 喂 vt-parser → 断言屏幕
+- [x] 各模块 README + 测试
+- [x] 标签 **v0.2.0-stage1**（合回 main 的合并提交上打，见进度日志）
 依赖：阶段 0。验收：模块可独立构建测试；MVP 本机运行通过。
 
 ### 阶段 2：term-input + term-render-gtk（2-4 周）
@@ -146,3 +146,17 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
     `chore: add GitHub Actions CI with per-SDK compile matrix and doc checks` →
     `docs: add README and architecture overview`
   - 标签 **v0.1.0-stage0** 打在阶段 0 收尾提交；进入阶段 1。
+- 2026-10-03（阶段 1 完成）：
+  - workspace：根 `Cargo.toml`（成员 `.`/vt-parser/pty-core/pty-unix，根包 `wbwtty` +
+    `pipe_mvp` example）；`Cargo.lock` 入库（libc 0.2.190）
+  - `vt-parser`：零依赖实现（decode/width/parser/screen/terminal），58 单元 + 13 集成测试；
+    分支 `feature/vt-parser`（`feat:`/`test:`/`docs:` 三提交）合并回 main
+  - `pty-core`：trait + 注册表（priority 升序、`BackendUnavailable` 回退、同 kind 替换）+
+    C ABI `include/pty_core.h`；9 测试（伪后端 FFI 往返）
+  - `pty-unix`：POSIX 实现（posix_openpt/fork/setsid/TIOCSCTTY/execvp/TIOCSWINSZ/kill(-pid)/
+    EIO→EOF/waitpid）；unix 集成测试 5 项；`x86_64-unknown-linux-gnu`（含 tests）与
+    `x86_64-apple-darwin` cargo check 通过；Windows 下空壳
+  - `examples/pipe_mvp.rs` PASS（python → 管道 → 断言颜色/光标/宽字符/真彩色/damage）
+  - ci-local 新增步骤 4b（linux 目标交叉检查）与 pipe_mvp 运行；本机 ci-local **PASSED**
+  - 修复提交：`fix: track vt-parser package manifest and workspace lockfile`（清单漏提交）
+  - 合并 `feature/pty-core` 后在合并提交打标签 **v0.2.0-stage1**；进入阶段 2。
