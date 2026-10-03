@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'fix/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------- 文档存在性与一致性（规格：CI 必须检查 AGENT.md/plan.md/各模块 README） ----------
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required docs exist and are non-empty
+        run: |
+          set -eu
+          fail=0
+          check() {
+            if [ ! -s "$1" ]; then echo "::error file=$1::missing or empty"; fail=1;
+            else echo "ok: $1"; fi
+          }
+          check AGENT.md
+          check plan.md
+          check README.md
+          check docs/sdk-compat-matrix.md
+          check docs/api-whitelist.md
+          if [ -d docs ]; then
+            for f in docs/*.md; do check "$f"; done
+          fi
+          # 每个模块必须有 README（阶段1起存在 crates/*）
+          if [ -d crates ]; then
+            for d in crates/*/; do check "$d/README.md"; done
+          fi
+          if [ -d apps ]; then
+            for d in apps/*/; do check "$d/README.md"; done
+          fi
+          # 最近更新标记
+          grep -q '最近更新' AGENT.md || { echo "::error file=AGENT.md::缺少“最近更新”标记"; fail=1; }
+          grep -q '最近更新' plan.md || { echo "::error file=plan.md::缺少“最近更新”标记"; fail=1; }
+          exit $fail
+      - name: Generated matrix must be reproducible (idempotent)
+        run: |
+          python3 tools/gen-compat-matrix.py
+          python3 tools/check_api_whitelist.py --emit-md
+          git diff --exit-code docs/sdk-compat-matrix.md config/api-whitelist.json \
+            tools/sdk-probe/probe.c docs/api-whitelist.md \
+            || { echo "::error::生成物与仓库不同步，请重新生成后提交"; exit 1; }
+
+  # ---------- API 白名单 linter（规格：白名单外 API 必须动态加载） ----------
+  api-whitelist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check_api_whitelist
+        run: python3 tools/check_api_whitelist.py
+
+  # ---------- 构建 + 单元测试（全平台；阶段0 无 workspace 时安全跳过） ----------
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GTK3 dev (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
+      - name: Build workspace
+        shell: bash
+        run: |
+          if [ -f Cargo.toml ]; then
+            cargo build --workspace --all-targets
+          else
+            echo "workspace not created yet (stage 0) — skipping"
+          fi
+      - name: Test workspace
+        shell: bash
+        run: |
+          if [ -f Cargo.toml ]; then
+            cargo test --workspace
+          else
+            echo "workspace not created yet (stage 0) — skipping"
+          fi
+
+  # ---------- 管道模式 MVP 冒烟（阶段1起；Windows 上用 python 启动验证桥接） ----------
+  pipe-mvp:
+    runs-on: windows-latest
+    needs: build-test
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run pipe MVP example
+        shell: bash
+        run: |
+          if [ -f examples/pipe_mvp.rs ] || grep -q 'pipe_mvp' Cargo.toml 2>/dev/null; then
+            cargo run --example pipe_mvp
+          else
+            echo "pipe MVP not present yet (stage 0) — skipping"
+          fi
+
+  # ---------- pty-win10-early per-SDK 编译矩阵（规格：7 个早期 SDK 逐一 cl 编译） ----------
+  sdk-compile-matrix:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk:
+          - '10.0.10240'
+          - '10.0.10586'
+          - '10.0.14393'
+          - '10.0.15063'
+          - '10.0.16299'
+          - '10.0.17134'
+          - '10.0.17763'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile SDK probe (${{ matrix.sdk }})
+        shell: pwsh
+        run: |
+          $inc = "sdk-headers/${{ matrix.sdk }}"
+          foreach ($d in @('um','shared','ucrt','km')) {
+            if (-not (Test-Path "$inc/$d")) { Write-Host "note: $d absent in $inc" }
+          }
+          & cl /nologo /Zs /c "tools/sdk-probe/probe.c" `
+            /I"$inc/um" /I"$inc/shared" /I"$inc/ucrt" /I"$inc/km" /Foprobe-${{ matrix.sdk }}.obj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "probe OK for SDK ${{ matrix.sdk }}"
+      - name: Compile pty-win10-early C shim (${{ matrix.sdk }})
+        shell: pwsh
+        run: |
+          $inc = "sdk-headers/${{ matrix.sdk }}"
+          $srcs = @(Get-ChildItem "crates/pty-win10-early/csrc/*.c" -ErrorAction SilentlyContinue)
+          if ($srcs.Count -eq 0) { Write-Host "csrc not present yet (stage <4) — skipping"; exit 0 }
+          foreach ($s in $srcs) {
+            & cl /nologo /c "$($s.FullName)" `
+              /I"$inc/um" /I"$inc/shared" /I"$inc/ucrt" /I"$inc/km" `
+              /I"crates/pty-win10-early/csrc" /Fo"$($s.BaseName)-${{ matrix.sdk }}.obj"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Write-Host "csrc OK for SDK ${{ matrix.sdk }}"
