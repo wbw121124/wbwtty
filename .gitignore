@@ -18,6 +18,10 @@ CMakeCache.txt
 CMakeFiles/
 compile_commands.json
 
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
 # ---- 通用 ----
 .DS_Store
 Thumbs.db
