@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/vt-parser"]
+members = [".", "crates/vt-parser", "crates/pty-core"]
 resolver = "2"
 
 [workspace.package]
