@@ -1,0 +1,8 @@
+[package]
+name = "pty-core"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "PTY abstraction: traits, backend registry/selection, C ABI"
+
+[dependencies]

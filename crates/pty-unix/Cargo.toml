@@ -1,0 +1,10 @@
+[package]
+name = "pty-unix"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "POSIX PTY backend (Linux/macOS); no-op stub on Windows"
+
+[dependencies]
+pty-core = { path = "../pty-core" }
+libc = "0.2"
