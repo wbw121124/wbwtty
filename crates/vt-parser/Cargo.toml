@@ -1,0 +1,8 @@
+[package]
+name = "vt-parser"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "VT sequence parser and terminal screen state (zero platform dependencies)"
+
+[dependencies]
