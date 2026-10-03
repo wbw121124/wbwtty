@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   阶段 0 工具：官方 Windows 10 SDK 安装器下载/提取 + 头文件交叉校验（可复现脚本）。
 .DESCRIPTION

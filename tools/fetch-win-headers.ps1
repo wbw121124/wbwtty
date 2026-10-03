@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   阶段 0 工具：获取 7 个 Windows 10 SDK 版本的官方头文件快照到本地临时目录。
 .DESCRIPTION
