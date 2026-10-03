@@ -1,0 +1,8 @@
+[package]
+name = "term-input"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Keyboard/mouse/paste events to VT sequence encoding (pure logic, zero deps)"
+
+[dependencies]
