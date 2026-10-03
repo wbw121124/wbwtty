@@ -1,7 +1,7 @@
 # plan.md — 跨平台终端框架实施计划
 
 - 最近更新：2026-10-03
-- 当前阶段：**阶段 1 完成（v0.2.0-stage1）→ 阶段 2 待开始**
+- 当前阶段：**阶段 2 进行中**（MSYS2 ✅、term-input ✅、term-render-gtk 进行中 → v0.3.0-stage2）
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -79,9 +79,9 @@ F:\wbwtty\
 - [x] 标签 **v0.2.0-stage1**（合回 main 的合并提交上打，见进度日志）
 依赖：阶段 0。验收：模块可独立构建测试；MVP 本机运行通过。
 
-### 阶段 2：term-input + term-render-gtk（2-4 周）
-- [ ] MSYS2 → D:\msys（ucrt64 + GTK3 开发包）
-- [ ] term-input：键/鼠/滚轮/paste → VT 序列；修饰键、application keypad、SGR mouse、bracketed paste
+### 阶段 2：term-input + term-render-gtk（2-4 周）— 进行中
+- [x] MSYS2 → D:\msys（ucrt64 + GTK3 开发包；包命名已重构为 mingw-w64-ucrt-x86_64-*）
+- [x] term-input：键/鼠/滚轮/paste → VT 序列；修饰键、application keypad、SGR mouse、bracketed paste
 - [ ] term-render-gtk：GTK3+Cairo，damage 驱动重绘、字形缓存、真彩色、光标、滚动缓冲、resize 联动
 - [ ] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
 
@@ -160,3 +160,12 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
   - ci-local 新增步骤 4b（linux 目标交叉检查）与 pipe_mvp 运行；本机 ci-local **PASSED**
   - 修复提交：`fix: track vt-parser package manifest and workspace lockfile`（清单漏提交）
   - 合并 `feature/pty-core` 后在合并提交打标签 **v0.2.0-stage1**；进入阶段 2。
+- 2026-10-03（阶段 2 开始）：
+  - MSYS2 完成：安装器 85047704 B（SHA-256 `7CCD43DE…6B5B7E`，GitHub nightly-x86_64 资产）→
+    静默装到 `D:\msys`；**包命名重构**：`mingw-w64-ucrt64-*` → `mingw-w64-ucrt-x86_64-*`；
+    已装 toolchain（gcc 16.2.0）+ gtk3（3.24.52，85 包/1.26GB）+ pkgconf，
+    `pkg-config --modversion gtk+-3.0` = 3.24.52
+  - `feature/term-input` 分支：`feat: add term-input VT sequence encoder` →
+    `test: add term-input integration tests` → `docs: add term-input module README` →
+    `chore: sync Cargo.lock…`（11 单元 + 6 集成测试全绿）
+  - 下一步：term-render-gtk（Rust(gnu) ↔ ucrt64 链接实测）。
