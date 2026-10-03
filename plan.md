@@ -1,7 +1,7 @@
 # plan.md — 跨平台终端框架实施计划
 
 - 最近更新：2026-10-03
-- 当前阶段：**阶段 0（SDK 兼容性调研）进行中**
+- 当前阶段：**阶段 0 完成（v0.1.0-stage0）→ 阶段 1 进行中**
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -54,21 +54,22 @@ F:\wbwtty\
 
 ## 3. 阶段任务、估算、依赖、验收
 
-### 阶段 0：SDK 兼容性调研（1 周）— 当前
+### 阶段 0：SDK 兼容性调研（1 周）— 完成
 前置条件：无（未完成前不得进入编码阶段）
-- [ ] git init + .gitignore + AGENT.md/plan.md 初始提交
-- [ ] 下载 7 版头文件（D:\temp）+ include 闭包裁剪入库
-- [ ] 官方安装器（10240/17763）静默安装交叉校验 → docs/header-verification.md
-- [ ] 生成 docs/sdk-compat-matrix.md（逐 API × SDK 版本；ConPTY API 仅 17763+；行为差异；各后端最低 SDK）
-- [ ] config/api-whitelist.json + docs/api-whitelist.md（早期 SDK 全部存在的 API 才允许静态链接）
-- [ ] tools/check_api_whitelist.py 本机 linter
-- [ ] CI：构建+测试矩阵、per-SDK 编译矩阵（cl × 7 版本）、文档存在性检查
-- [ ] 提交 `docs: add SDK compatibility matrix and API whitelist`
-- [ ] 标签 **v0.1.0-stage0**
+- [x] git init + .gitignore + AGENT.md/plan.md 初始提交
+- [x] 下载 7 版头文件（D:\temp）+ include 闭包裁剪入库
+- [x] 官方安装器（10240/17763）静默安装交叉校验 → docs/header-verification.md
+      （17763 引导器非提权 0x3e9 失败 → 官方 ISO + msiexec /a 替代，取舍已记录）
+- [x] 生成 docs/sdk-compat-matrix.md（逐 API × SDK 版本；ConPTY API 仅 17763+；行为差异；各后端最低 SDK）
+- [x] config/api-whitelist.json + docs/api-whitelist.md（早期 SDK 全部存在的 API 才允许静态链接）
+- [x] tools/check_api_whitelist.py 本机 linter
+- [x] CI：构建+测试矩阵、per-SDK 编译矩阵（cl × 7 版本）、文档存在性检查
+- [x] 提交 `docs: add SDK compatibility matrix and API whitelist`
+- [x] 标签 **v0.1.0-stage0**
 验收：7 版头文件齐备且裁剪入库；矩阵覆盖规格点名的全部拦截函数；
 白名单机读+人读齐套；CI 配置齐全；标签与提交符合规范。
 
-### 阶段 1：vt-parser + pty-core + pty-unix + 管道 MVP（1-2 周）
+### 阶段 1：vt-parser + pty-core + pty-unix + 管道 MVP（1-2 周）— 当前
 - [ ] vt-parser：UTF-8 增量解码、ESC/CSI/OSC/DCS、SGR 真彩色、光标/擦除/滚动区/alt-screen、
       鼠标模式 1000/1002/1003/1006、bracketed paste、宽字符、滚动缓冲、行级 damage；feed()/get_screen()
 - [ ] pty-core：trait Pty{spawn/read/write/resize/send_signal/close} + Signal + 后端选择 + C ABI 头
@@ -131,3 +132,17 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
 ## 6. 进度日志
 
 - 2026-10-03：计划建立；git 仓库初始化（main）；阶段 0 开始。
+- 2026-10-03（阶段 0 收尾）：
+  - 头文件：稀疏克隆 7 版官方归档 → `sdk-headers/`（闭包裁剪，1230 文件）
+  - 官方抽查：10240 静默安装成功（关键头 SHA-256 全一致、147 共有文件 0 差异）；
+    17763 引导器 0x3e9 → ISO+MSI 管理解压（153 共有文件 129 一致、24 servicing 差异、
+    快照为官方超集）；62 白名单符号两版官方头全部可声明
+  - 产出：`docs/sdk-compat-matrix.md`（GENERATED）、`config/api-whitelist.json`、
+    `docs/api-whitelist.md`、`docs/header-verification.md`、`docs/architecture.md`、
+    `README.md`、`tools/*`（fetch/prune/gen/compare/verify/linter/probe）、
+    `scripts/ci-local.ps1`、`.github/workflows/ci.yml`
+  - 提交：`chore: add SDK header fetch, pruning and matrix tooling` →
+    `docs: add SDK compatibility matrix and API whitelist` →
+    `chore: add GitHub Actions CI with per-SDK compile matrix and doc checks` →
+    `docs: add README and architecture overview`
+  - 标签 **v0.1.0-stage0** 打在阶段 0 收尾提交；进入阶段 1。
