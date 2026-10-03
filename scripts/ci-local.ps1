@@ -78,6 +78,10 @@ if (-not $SkipBuild) {
         if ($LASTEXITCODE -ne 0) { throw "cargo build exit $LASTEXITCODE" }
         & cargo test --workspace
         if ($LASTEXITCODE -ne 0) { throw "cargo test exit $LASTEXITCODE" }
+        if (Test-Path 'examples/pipe_mvp.rs') {
+            & cargo run --example pipe_mvp
+            if ($LASTEXITCODE -ne 0) { throw "pipe_mvp exit $LASTEXITCODE" }
+        }
     }
 
     Step 'pty-unix cross-target check (linux)' {
