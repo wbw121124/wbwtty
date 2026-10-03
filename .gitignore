@@ -1,0 +1,39 @@
+# ---- Rust ----
+target/
+**/*.rs.bk
+
+# ---- C/C++ ----
+build/
+cmake-build-*/
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.pdb
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# ---- 通用 ----
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.temp
+.env
+.idea/
+.vscode/
+*.swp
+*~
+
+# ---- 本地临时/下载（所有下载与解压在 D:\temp）----
+D:/temp/
+*.patch
+*.rej
+
+# ---- 个人文件 ----
+提示词.md
