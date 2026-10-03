@@ -6,8 +6,9 @@
   1) 必需文档存在且非空（AGENT.md/plan.md/README.md/docs/*/各模块 README）
   2) 生成物幂等：gen-compat-matrix + check_api_whitelist --emit-md 后无 git diff
   3) API 白名单 linter
-  4) （若有 workspace）cargo build + cargo test
-  5) （若 cl 在 PATH）用全部 7 个 SDK 头文件编译 tools/sdk-probe/probe.c
+   4) （若有 workspace）cargo build + cargo test
+   4b) pty-unix 在 x86_64-unknown-linux-gnu 目标上 cargo check（已安装该 target 时）
+   5) （若 cl 在 PATH）用全部 7 个 SDK 头文件编译 tools/sdk-probe/probe.c
   步骤失败用 throw 抛出（不可用 exit —— exit 会终止整个脚本）。
 #>
 [CmdletBinding()]
@@ -77,6 +78,17 @@ if (-not $SkipBuild) {
         if ($LASTEXITCODE -ne 0) { throw "cargo build exit $LASTEXITCODE" }
         & cargo test --workspace
         if ($LASTEXITCODE -ne 0) { throw "cargo test exit $LASTEXITCODE" }
+    }
+
+    Step 'pty-unix cross-target check (linux)' {
+        if (-not (Test-Path 'crates/pty-unix')) { Write-Host '  no pty-unix yet - skip'; return }
+        $installed = @(& rustup target list --installed 2>$null) | ForEach-Object { "$_".Trim() }
+        if (($installed -notcontains 'x86_64-unknown-linux-gnu')) {
+            Write-Host '  linux target not installed - skipped (rustup target add x86_64-unknown-linux-gnu)'
+            return
+        }
+        & cargo check -p pty-unix --target x86_64-unknown-linux-gnu --all-targets
+        if ($LASTEXITCODE -ne 0) { throw "cross check exit $LASTEXITCODE" }
     }
 }
 
