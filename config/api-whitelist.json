@@ -1,0 +1,333 @@
+{
+  "_comment": "pty-win10-early 静态链接白名单。static_allowed 中的符号在全部 7 个 Windows 10 SDK 头文件中均有声明，允许在 pty-win10-early 静态引用；dynamic_only 中的符号必须 LoadLibrary+GetProcAddress 动态加载，严禁出现在 extern/import 中。其余任何 Win32 符号引用都会被 tools/check_api_whitelist.py 拒绝。",
+  "static_allowed": {
+    "CreateProcessW": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "CreateProcessAsUserW": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "CreateProcessWithLogonW": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winbase.h"
+    },
+    "TerminateProcess": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "GetExitCodeProcess": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "OpenProcess": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "GetProcessId": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "ResumeThread": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "SuspendThread": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "GetThreadId": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "CreateThread": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "GetExitCodeThread": {
+      "group": "process",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "CreateRemoteThread": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "VirtualAllocEx": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/memoryapi.h"
+    },
+    "VirtualFreeEx": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/memoryapi.h"
+    },
+    "WriteProcessMemory": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/memoryapi.h"
+    },
+    "ReadProcessMemory": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/memoryapi.h"
+    },
+    "GetThreadContext": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "SetThreadContext": {
+      "group": "thread-injection",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "LoadLibraryW": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "LoadLibraryExW": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "FreeLibrary": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "GetProcAddress": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "GetModuleHandleW": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "GetModuleHandleExW": {
+      "group": "loader",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "CreateFileW": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "ReadFile": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "WriteFile": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "CloseHandle": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/handleapi.h"
+    },
+    "DuplicateHandle": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/handleapi.h"
+    },
+    "CreatePipe": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "CreateNamedPipeW": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "ConnectNamedPipe": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "DisconnectNamedPipe": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "SetNamedPipeHandleState": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "PeekNamedPipe": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/namedpipeapi.h"
+    },
+    "FlushFileBuffers": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "GetFileType": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "GetFileSizeEx": {
+      "group": "file-pipe",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/fileapi.h"
+    },
+    "WaitForSingleObject": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "WaitForMultipleObjects": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "Sleep": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "GetTickCount": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/sysinfoapi.h"
+    },
+    "GetTickCount64": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/sysinfoapi.h"
+    },
+    "QueryPerformanceCounter": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/profileapi.h"
+    },
+    "QueryPerformanceFrequency": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/profileapi.h"
+    },
+    "CreateEventW": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "SetEvent": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "ResetEvent": {
+      "group": "sync-wait",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "GenerateConsoleCtrlEvent": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "AttachConsole": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi.h"
+    },
+    "FreeConsole": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi.h"
+    },
+    "AllocConsole": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi.h"
+    },
+    "SetConsoleCtrlHandler": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi.h"
+    },
+    "GetConsoleWindow": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi3.h"
+    },
+    "GetConsoleProcessList": {
+      "group": "console-host",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi3.h"
+    },
+    "MultiByteToWideChar": {
+      "group": "string",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/stringapiset.h"
+    },
+    "WideCharToMultiByte": {
+      "group": "string",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/stringapiset.h"
+    },
+    "lstrlenW": {
+      "group": "string",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winbase.h"
+    },
+    "GetLastError": {
+      "group": "error",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/errhandlingapi.h"
+    },
+    "SetLastError": {
+      "group": "error",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/errhandlingapi.h"
+    },
+    "FormatMessageW": {
+      "group": "error",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winbase.h"
+    }
+  },
+  "dynamic_only": {
+    "CreatePseudoConsole": {
+      "min_sdk": "10.0.17763",
+      "reason": "ConPTY 仅 Windows 10 1809+ 提供；1809 之前运行时加载失败须回退 pty-win10-early",
+      "declared_in": "um/consoleapi.h"
+    },
+    "ResizePseudoConsole": {
+      "min_sdk": "10.0.17763",
+      "reason": "ConPTY 仅 Windows 10 1809+ 提供；1809 之前运行时加载失败须回退 pty-win10-early",
+      "declared_in": "um/consoleapi.h"
+    },
+    "ClosePseudoConsole": {
+      "min_sdk": "10.0.17763",
+      "reason": "ConPTY 仅 Windows 10 1809+ 提供；1809 之前运行时加载失败须回退 pty-win10-early",
+      "declared_in": "um/consoleapi.h"
+    }
+  },
+  "missing_everywhere": []
+}

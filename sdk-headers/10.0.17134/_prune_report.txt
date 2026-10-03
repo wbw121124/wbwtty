@@ -1,0 +1,32 @@
+# unresolved #include while pruning 10.0.17134
+# (guarded by preprocessor conditionals; compile probe must not reach them)
+km/ntddk.h: excpt.h
+km/wdm.h: excpt.h
+km/wdm.h: intrin.h
+km/wdm.h: stdarg.h
+shared/ntdef.h: excpt.h
+shared/rpc.h: excpt.h
+shared/rpc.h: rpcerr.h
+shared/rpc.h: rpcmac.h
+shared/rpc.h: setjmp.h
+shared/sal.h: codeanalysis\sourceannotations.h
+ucrt/corecrt.h: vcruntime.h
+ucrt/corecrt_memcpy_s.h: vcruntime_string.h
+ucrt/corecrt_memory.h: vcruntime_string.h
+ucrt/corecrt_wstring.h: vcruntime_string.h
+ucrt/stdlib.h: limits.h
+ucrt/string.h: vcruntime_string.h
+um/mmsyscom.h: macwin32.h
+um/objidl.h: limits.h
+um/objidlbase.h: limits.h
+um/winbase.h: macwin32.h
+um/windows.h: excpt.h
+um/windows.h: stdarg.h
+um/windows.h: winwlm.h
+um/wingdi.h: macwin32.h
+um/winnls.h: macwin32.h
+um/winnt.h: excpt.h
+um/winnt.h: intrin.h
+um/winreg.h: macwin32.h
+um/winuser.h: macwin32.h
+um/winuser.h: stdarg.h
