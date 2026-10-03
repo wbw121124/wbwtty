@@ -1,0 +1,21 @@
+[workspace]
+members = [".", "crates/vt-parser"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[package]
+name = "wbwtty"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Cross-platform terminal framework - workspace root with examples"
+
+[dependencies]
+vt-parser = { path = "crates/vt-parser" }
+
+[[example]]
+name = "pipe_mvp"
+path = "examples/pipe_mvp.rs"
