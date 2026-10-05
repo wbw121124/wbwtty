@@ -1,7 +1,7 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-03
-- 当前阶段：**阶段 2 进行中**（MSYS2 ✅、term-input ✅、term-render-gtk 进行中 → v0.3.0-stage2）
+- 最近更新：2026-10-05
+- 当前阶段：**阶段 2 完成**（MSYS2 ✅、term-input ✅、term-render-gtk ✅ → 标签 `v0.3.0-stage2`），阶段 3 待开始
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -20,6 +20,7 @@ GPU 加速渲染，模块化可独立复用，全程 Git + Conventional Commits 
 | GTK 渲染 | MSYS2 安装到 D:\msys（ucrt64 环境），本机可构建；CI Ubuntu 为权威验证 |
 | 执行范围 | 阶段 0→5 严格顺序推进，每阶段提交+标签后进入下一阶段 |
 | Git 身份 | wbw121124 <wbw121124@163.com>（仅仓库 local 配置） |
+| 本机持久化 | **C: 重启会被清空** → Rust 工具链与依赖缓存迁到 `D:\rustup`、`D:\cargo`（`RUSTUP_HOME`/`CARGO_HOME`）；临时与下载一律 `D:\temp`、软件装 `D:\`；仓库只在 `F:\wbwtty` 内操作 |
 
 ## 2. 仓库结构
 
@@ -79,11 +80,12 @@ F:\wbwtty\
 - [x] 标签 **v0.2.0-stage1**（合回 main 的合并提交上打，见进度日志）
 依赖：阶段 0。验收：模块可独立构建测试；MVP 本机运行通过。
 
-### 阶段 2：term-input + term-render-gtk（2-4 周）— 进行中
+### 阶段 2：term-input + term-render-gtk（2-4 周）— 完成
 - [x] MSYS2 → D:\msys（ucrt64 + GTK3 开发包；包命名已重构为 mingw-w64-ucrt-x86_64-*）
 - [x] term-input：键/鼠/滚轮/paste → VT 序列；修饰键、application keypad、SGR mouse、bracketed paste
-- [ ] term-render-gtk：GTK3+Cairo，damage 驱动重绘、字形缓存、真彩色、光标、滚动缓冲、resize 联动
-- [ ] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
+- [x] term-render-gtk：GTK3+Cairo，damage 驱动重绘、字形缓存、真彩色、光标、滚动缓冲、resize 联动
+      （Rust(gnu) ↔ MSYS2 ucrt64 链接**实测通过**；pangocairo 自声明 FFI；CI 仅 Linux 全量构建）
+- [x] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
 
 ### 阶段 3：pty-conpty（2-3 周）
 - [ ] ConPTY 三函数 + STARTUPINFOEXW/PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE 全部运行时动态加载
@@ -126,7 +128,8 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
 2. 1507 无 `ENABLE_VIRTUAL_TERMINAL_PROCESSING`（1511 起）→ 前端只吃 VT，转换全在 host；
    1507 上依赖 VT 直写的子程序只能经 hook 捕获，不承诺其自带 VT 着色。
 3. 本机无 MSVC/SDK → 编译矩阵权威在 CI，本机 linter 等价检查 API 引用。
-4. Rust(gnu) ↔ MSYS2 ucrt64 链接 → 实测为准，失败则 GTK 本机构建降级 CI-only 并记入 README。
+4. Rust(gnu) ↔ MSYS2 ucrt64 链接 → **已实测通过**（阶段 2：`gtk_smoke`/`demo_window` 本机可运行；
+   CI Ubuntu 为权威验证，Windows/macOS CI 无 GTK 开发包时排除该 crate）。
 5. 老 SDK 官方安装器 fwlink 可能失效 → 记录于 header-verification.md，以快照为准并说明取舍。
 
 ## 6. 进度日志
@@ -169,3 +172,21 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
     `test: add term-input integration tests` → `docs: add term-input module README` →
     `chore: sync Cargo.lock…`（11 单元 + 6 集成测试全绿）
   - 下一步：term-render-gtk（Rust(gnu) ↔ ucrt64 链接实测）。
+- 2026-10-05（阶段 2 完成）：
+  - 本机环境：C: 重启被清空 → `RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`（工具链 + 依赖缓存
+    + linux/darwin 交叉 target 全部落 D:）；仓库内操作只在 `F:\wbwtty`
+  - `feature/term-render-gtk` 分支新增 `crates/term-render-gtk`：
+    - 分层 `batch`/`color`/`metrics`/`cache`/`viewport`/`pangocairo`/`renderer`/`widget`
+    - gtk-rs 0.18 API 适配（`Propagation`、`Context::metrics`、`Allocation::width()`、
+      `set_font_description(Some(..))`、`FontDescription::size()`）
+    - **pangocairo FFI**：gtk-rs 0.18 未绑定 `pango_cairo_*` → 自声明一个符号 +
+      `build.rs` pkg-config 探测 `pangocairo`（本机 MSYS2 / CI Linux 同一路径）
+    - 行尾纯空白段裁剪（背景已铺底，省字形布局；带样式空白保留）
+    - 回滚缓冲：`viewport::build_viewport` + 滚轮/`scroll_by`（偏移 >0 整屏重绘、隐藏光标）
+    - 示例 `gtk_smoke`（链接冒烟）、`demo_window`（动画演示窗口，本机跑通）
+  - 本机 `cargo build/test --workspace` 全绿（**136 测试**：vt-parser 71、pty-core 9、
+    term-input 17、term-render-gtk 39、pty-unix 空壳）；`ci-local.ps1` **PASSED**；
+    `pipe_mvp` PASS；linux 目标交叉检查 OK
+  - CI：`build-test` 在非 Linux 平台 `--exclude term-render-gtk`（GTK 权威验证在 Ubuntu），
+    Linux 补装 `pkg-config`
+  - 标签 **v0.3.0-stage2** 打在合回 main 的合并提交上；进入阶段 3（pty-conpty）。

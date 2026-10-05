@@ -73,12 +73,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev
+          sudo apt-get install -y libgtk-3-dev pkg-config
       - name: Build workspace
         shell: bash
         run: |
           if [ -f Cargo.toml ]; then
-            cargo build --workspace --all-targets
+            # GTK 渲染器只在 Linux 权威验证（plan.md 风险 4）：其余平台无 GTK 开发包时排除
+            args="--workspace --all-targets"
+            if [ "${{ runner.os }}" != "Linux" ]; then
+              args="$args --exclude term-render-gtk"
+              echo "note: ${{ runner.os }} 无 GTK 开发包，排除 term-render-gtk"
+            fi
+            cargo build $args
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
@@ -86,7 +92,11 @@ jobs:
         shell: bash
         run: |
           if [ -f Cargo.toml ]; then
-            cargo test --workspace
+            args="--workspace"
+            if [ "${{ runner.os }}" != "Linux" ]; then
+              args="$args --exclude term-render-gtk"
+            fi
+            cargo test $args
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi

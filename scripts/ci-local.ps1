@@ -15,6 +15,12 @@
 param([switch]$SkipBuild)
 
 $ErrorActionPreference = 'Stop'
+# C: 重启被清空：Rust 工具链/依赖缓存固定 D:（scripts/env.ps1 的等价内联；
+# CI runner 无 D:\rustup 时自动跳过，不影响 GitHub Actions）
+if (Test-Path 'D:\rustup') { $env:RUSTUP_HOME = 'D:\rustup' }
+if (Test-Path 'D:\cargo') { $env:CARGO_HOME = 'D:\cargo' }
+if (Test-Path 'D:\cargo\bin') { $env:Path = 'D:\cargo\bin;' + $env:Path }
+if (Test-Path 'D:\msys\ucrt64\bin') { $env:Path = 'D:\msys\ucrt64\bin;' + $env:Path }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 $fail = 0
