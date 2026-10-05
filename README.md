@@ -1,7 +1,7 @@
 # wbwtty — 跨平台终端框架
 
-- 最近更新：2026-10-03
-- 状态：阶段 0（SDK 兼容性调研）完成 → `v0.1.0-stage0`
+- 最近更新：2026-10-05
+- 状态：阶段 0/1/2 完成 → `v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`（阶段 3 pty-conpty 待开始）
 - 平台：Windows 10（含 1809 之前）/ Windows 11 / Linux / macOS
 
 模块化终端框架：统一 PTY 抽象 + VT 解析 + GPU/GTK 渲染 + 输入编码，
@@ -84,15 +84,21 @@ cargo test  --workspace
 # 单独构建某个模块
 cargo build -p vt-parser
 
+# 本机会话环境（C: 重启被清空，工具链/缓存固定 D:；新终端先点号引入）
+. .\scripts\env.ps1
+
 # 本机等价 CI 子集（文档检查 + 白名单 linter + 构建/测试）
 powershell -File scripts/ci-local.ps1
 ```
 
 平台前提：
 
-- **Linux**：`apt-get install libgtk-3-dev`（构建 term-render-gtk 时）
-- **Windows（GTK）**：MSYS2 ucrt64 环境安装于 `D:\msys`（`pacman -S mingw-w64-ucrt-x86_64-gtk3`）
+- **Linux**：`apt-get install libgtk-3-dev pkg-config`（构建 term-render-gtk 时）
+- **Windows（GTK）**：MSYS2 ucrt64 环境安装于 `D:\msys`（`pacman -S mingw-w64-ucrt-x86_64-gtk3`），
+  构建/运行前把 `D:\msys\ucrt64\bin` 前置到 PATH（`scripts/env.ps1` 已处理）
 - **Windows 后端**：1809+ 自动使用 ConPTY；更早版本使用 `pty-win10-early`
+- **本机持久化**：C: 重启被清空 → `RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`，
+  依赖缓存不会随重启丢失；CI 的 Windows/macOS 无 GTK 开发包时排除 `term-render-gtk`（Ubuntu 权威验证）
 
 ## SDK 兼容性（阶段 0 成果）
 
