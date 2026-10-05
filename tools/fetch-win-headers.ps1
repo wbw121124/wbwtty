@@ -6,9 +6,9 @@
   方式克隆以下版本的头文件树（um/shared/ucrt/km 等）：
     10.0.10240 (1507), 10.0.10586 (1511), 10.0.14393 (1607), 10.0.15063 (1703),
     10.0.16299 (1709), 10.0.17134 (1803), 10.0.17763 (1809, 基线)
-  所有下载一律写入 D:\temp（不在 C:、不在 F:）。
+  所有下载一律写入 <仓库盘符>:\wbwtty-temp（按脚本位置探测，默认 G:\wbwtty-temp）。
 .PARAMETER Dest
-  目标目录，默认 D:\temp\win-headers
+  目标目录，默认 <仓库盘符>:\wbwtty-temp\win-headers
 .PARAMETER Proxy
   可选 HTTP 代理（默认 http://127.0.0.1:7890，失败时自动直连重试）
 .EXAMPLE
@@ -16,12 +16,16 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Dest = 'D:\temp\win-headers',
+    [string]$Dest = '',
     [string]$Repo = 'https://github.com/ralish/win-headers.git',
     [string]$Proxy = 'http://127.0.0.1:7890'
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $Dest) {
+    $repoDrive = (Split-Path -Qualifier (Split-Path -Parent $PSScriptRoot))
+    $Dest = Join-Path "$repoDrive\" 'wbwtty-temp\win-headers'
+}
 
 $Versions = @(
     '10.0.10240', '10.0.10586', '10.0.14393', '10.0.15063',

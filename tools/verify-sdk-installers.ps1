@@ -2,26 +2,30 @@
 .SYNOPSIS
   阶段 0 工具：官方 Windows 10 SDK 安装器下载/提取 + 头文件交叉校验（可复现脚本）。
 .DESCRIPTION
-  抽查 A：10.0.10240 安装器静默安装到 D:\temp\winsdk-10240（非提权可用）。
+  抽查 A：10.0.10240 安装器静默安装到 <临时目录>\winsdk-10240（非提权可用）。
   抽查 B：10.0.17763 引导器在非提权环境以 0x3e9 失败 —— 改用官方 ISO，
           WinRAR 解包 Installers\，再以 msiexec /a（管理安装，无需管理员）
           提取 Desktop Headers / Store Headers / UCRT Headers 并合并为
-          D:\temp\winsdk-17763-official\10.0.17763.0。
-  随后调用 tools/compare-sdk-headers.py 逐版本对比，产出 D:\temp\cmp-<ver>.md。
-  所有下载/解压只写 D:\temp。
+          <临时目录>\winsdk-17763-official\10.0.17763.0。
+  随后调用 tools/compare-sdk-headers.py 逐版本对比，产出 <临时目录>\cmp-<ver>.md。
+  所有下载/解压只写临时目录（默认 <仓库盘符>:\wbwtty-temp，按脚本位置探测）。
 .NOTES
   下载与解压产物（安装器/ISO）SHA-256 记录于 docs/header-verification.md。
   幂等：已存在的文件不会重复下载/解压。
 #>
 [CmdletBinding()]
 param(
-    [string]$Work = 'D:\temp',
-    [string]$Repo = 'F:\wbwtty',
+    [string]$Work = '',
+    [string]$Repo = '',
     [string]$Proxy = 'http://127.0.0.1:7890',
     [switch]$SkipDownload
 )
 
 $ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoDrive = (Split-Path -Qualifier $repoRoot)
+if (-not $Work) { $Work = Join-Path "$repoDrive\" 'wbwtty-temp' }
+if (-not $Repo) { $Repo = $repoRoot }
 $dl = Join-Path $Work 'winsdk-dl'
 New-Item -ItemType Directory -Force -Path $dl | Out-Null
 
