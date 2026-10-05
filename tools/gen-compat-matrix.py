@@ -51,6 +51,11 @@ CURATED_KERNEL: dict[str, list[str]] = {
         "WriteProcessMemory", "ReadProcessMemory", "GetThreadContext",
         "SetThreadContext",
     ],
+    # ConPTY 属性列表：EXTENDED_STARTUPINFO_PRESENT + PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+    "proc-thread-attribute": [
+        "InitializeProcThreadAttributeList", "UpdateProcThreadAttribute",
+        "DeleteProcThreadAttributeList",
+    ],
     "loader": [
         "LoadLibraryW", "LoadLibraryExW", "FreeLibrary", "GetProcAddress",
         "GetModuleHandleW", "GetModuleHandleExW",
@@ -341,9 +346,12 @@ def main() -> int:
 
     # ---- 白名单 / 探针 / JSON ----
     wl = build_whitelist(matrix)
-    Path(args.whitelist).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.whitelist).write_text(
-        json.dumps(wl, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    whitelist_path = Path(args.whitelist)
+    whitelist_path.parent.mkdir(parents=True, exist_ok=True)
+    # 固定 LF：write_text 在 Windows 会按 os.linesep 写 CRLF，Linux CI 再生成即 diff
+    with whitelist_path.open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(wl, f, indent=2, ensure_ascii=False)
+        f.write("\n")
     if wl["missing_everywhere"]:
         print("[matrix] ERROR curated API missing from some SDK:", file=sys.stderr)
         for m in wl["missing_everywhere"]:
@@ -353,9 +361,11 @@ def main() -> int:
     print(f"[matrix] whitelist: {len(wl['static_allowed'])} static, "
           f"{len(wl['dynamic_only'])} dynamic-only -> {args.whitelist}")
 
-    Path(args.matrix_json).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.matrix_json).write_text(
-        json.dumps(matrix, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    matrix_path = Path(args.matrix_json)
+    matrix_path.parent.mkdir(parents=True, exist_ok=True)
+    with matrix_path.open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(matrix, f, indent=1, ensure_ascii=False)
+        f.write("\n")
 
     # ---- 文档 ----
     doc_path = Path(args.doc)

@@ -156,8 +156,11 @@ def verify_seeds(dest_root: Path) -> int:
 
 
 def main() -> int:
+    # 默认 <仓库盘符>:\wbwtty-temp\win-headers（按脚本位置探测，路径按盘符自适应）
+    _default_src = Path(__file__).resolve().parents[1]
+    _default_src = Path(_default_src.anchor) / 'wbwtty-temp' / 'win-headers'
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--src", default=r"D:\temp\win-headers")
+    ap.add_argument("--src", default=str(_default_src))
     ap.add_argument("--dest", default="sdk-headers")
     ap.add_argument("--versions", nargs="*", default=VERSIONS)
     args = ap.parse_args()

@@ -15,14 +15,21 @@
 param([switch]$SkipBuild)
 
 $ErrorActionPreference = 'Stop'
-# C: 重启被清空：Rust 工具链/依赖缓存固定 D:（scripts/env.ps1 的等价内联；
-# CI runner 无 D:\rustup 时自动跳过，不影响 GitHub Actions）
+$repo = Split-Path -Parent $PSScriptRoot
+Set-Location $repo
+# 路径按仓库所在盘符探测（scripts/env.ps1 的等价内联，fresh 进程自包含）：
+# - 临时目录 <盘符>:\wbwtty-temp；- Rust 默认位置，仅旧机器 D: 目录存在时才固定
+#   （CI runner 无 D:\rustup 时自动跳过，不影响 GitHub Actions）；- MSYS2 候选探测
+$repoDrive = (Split-Path -Qualifier $repo)
+$env:WBWTTY_TEMP = Join-Path "$repoDrive\" 'wbwtty-temp'
 if (Test-Path 'D:\rustup') { $env:RUSTUP_HOME = 'D:\rustup' }
 if (Test-Path 'D:\cargo') { $env:CARGO_HOME = 'D:\cargo' }
 if (Test-Path 'D:\cargo\bin') { $env:Path = 'D:\cargo\bin;' + $env:Path }
-if (Test-Path 'D:\msys\ucrt64\bin') { $env:Path = 'D:\msys\ucrt64\bin;' + $env:Path }
-$repo = Split-Path -Parent $PSScriptRoot
-Set-Location $repo
+$msysBin = @(
+    'E:\吴邦玮\项目\mymsys2\ucrt64\bin',
+    'D:\msys\ucrt64\bin'
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($msysBin) { $env:Path = "$msysBin;" + $env:Path }
 $fail = 0
 
 function Step($name, [scriptblock]$fn) {

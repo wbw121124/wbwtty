@@ -1,7 +1,8 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-05
-- 当前阶段：**阶段 2 完成**（MSYS2 ✅、term-input ✅、term-render-gtk ✅ → 标签 `v0.3.0-stage2`），阶段 3 待开始
+- 最近更新：2026-10-05（阶段 3 测试全绿，文档/提交推进中；**已恢复到新机器 wbw/MoMo**）
+- 当前阶段：**阶段 2 完成**（标签 `v0.3.0-stage2`）→ **阶段 3 pty-conpty**：阻塞已修复
+  （`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 测试全绿，见 §6），待 README/docs/提交/标签/CI
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -14,22 +15,22 @@ GPU 加速渲染，模块化可独立复用，全程 Git + Conventional Commits 
 | 决策点 | 结论 |
 |---|---|
 | SDK 头文件获取 | ralish/win-headers 快照为 7 版本权威来源 + 官方安装器（10240、17763）静默安装交叉校验 |
-| 下载/解压位置 | **一律 D:\temp**（不在 C:、不在 F:）；F: U盘仅放仓库本体；网络代理 127.0.0.1:7890 可用 |
+| 下载/解压位置 | **按仓库所在盘符自动检测**（`scripts/env.ps1`/`ci-local.ps1`）→ `<盘符>:\wbwtty-temp`（当前仓库在 G:，即 `G:\wbwtty-temp`）；网络代理 127.0.0.1:7890 可用 |
 | per-SDK 编译检查 | 真实编译矩阵在 GitHub Actions windows-latest（MSVC cl）；本机用 Python 白名单 linter |
 | CI 平台 | GitHub Actions（.github/workflows/ci.yml）+ 创建远端仓库并推送 |
-| GTK 渲染 | MSYS2 安装到 D:\msys（ucrt64 环境），本机可构建；CI Ubuntu 为权威验证 |
+| GTK 渲染 | 本机已有 MSYS2（`E:\吴邦玮\项目\mymsys2`，ucrt64），2026-10-05 补装 gtk3+pkgconf；CI Ubuntu 为权威验证 |
 | 执行范围 | 阶段 0→5 严格顺序推进，每阶段提交+标签后进入下一阶段 |
 | Git 身份 | wbw121124 <wbw121124@163.com>（仅仓库 local 配置） |
-| 本机持久化 | **C: 重启会被清空** → Rust 工具链与依赖缓存迁到 `D:\rustup`、`D:\cargo`（`RUSTUP_HOME`/`CARGO_HOME`）；临时与下载一律 `D:\temp`、软件装 `D:\`；仓库只在 `F:\wbwtty` 内操作 |
+| 本机持久化 | **换机 wbw/MoMo（Win11 22621，2026-10-05）**：仓库 `G:\wbwtty`；Rust 用默认 `C:\Users\wbw\.rustup/.cargo`；**路径一律按工作目录盘符检测**（临时/下载 → `<盘符>:\wbwtty-temp`，MSYS2 候选探测 `E:\吴邦玮\项目\mymsys2` → `D:\msys`）；git 用 safe.directory 免 dubious ownership |
 
 ## 2. 仓库结构
 
 ```
-F:\wbwtty\
+G:\wbwtty\
 ├── .gitignore  AGENT.md  plan.md  README.md  Cargo.toml (workspace)
 ├── .github/workflows/ci.yml
 ├── tools/                      # 阶段0脚本
-│   ├── fetch-win-headers.ps1   # 稀疏克隆 ralish/win-headers → D:\temp
+│   ├── fetch-win-headers.ps1   # 稀疏克隆 ralish/win-headers → <盘符>:\wbwtty-temp\win-headers
 │   ├── verify-sdk-installers.ps1 # 官方安装器静默安装 + 头文件 diff 校验
 │   ├── prune-headers.py        # include 闭包裁剪
 │   ├── gen-compat-matrix.py    # 扫描头文件生成兼容矩阵
@@ -87,10 +88,20 @@ F:\wbwtty\
       （Rust(gnu) ↔ MSYS2 ucrt64 链接**实测通过**；pangocairo 自声明 FFI；CI 仅 Linux 全量构建）
 - [x] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
 
-### 阶段 3：pty-conpty（2-3 周）
-- [ ] ConPTY 三函数 + STARTUPINFOEXW/PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE 全部运行时动态加载
-- [ ] 加载失败返回 BackendUnavailable → 上层回退 pty-win10-early
-- [ ] 本机 build 17763 集成测试（spawn cmd/resize/Ctrl+C）
+### 阶段 3：pty-conpty（2-3 周）— 收尾中（测试全绿，待提交/标签/CI）
+- [x] 白名单扩展：`proc-thread-attribute` 三函数（Initialize/Update/Delete）入 CURATED_KERNEL
+      → 65 static + 3 dynamic-only，7 版全绿（提交 `e111b4f`）
+- [x] `crates/pty-conpty` 骨架 + 动态加载：`src/sys.rs`（repr(C) 类型/白名单 extern/
+      `ConptyApi` 从 kernel32/kernelbase GetProcAddress，宽串 GetModuleHandleW 已修）、
+      `src/cmdline.rs`（引号/环境块 + 7 单测）、`src/imp.rs`（AttributeList RAII、
+      spawn_conpty、ConptyPty）、`src/lib.rs`（双平台桩）、`tests/spawn_conpty.rs`
+- [x] 单元测试全绿（cmdline 7 + sys 布局/导出 4）；`spawn_conpty_typed` 拆分供测试取句柄
+- [x] **阻塞已修复**：4 个集成测试挂死 → 根因“子进程继承父进程 std 管道句柄” →
+      修法 `StartupInfo.dwFlags |= STARTF_USESTDHANDLES` + `hStd*=NULL`
+      （microsoft/terminal#4380 官方建议；见 §6 2026-10-05 条目）
+- [x] 加载失败返回 `SpawnError::BackendUnavailable`（上层注册表回退，pty-win10-early 留占位）
+- [x] 本机集成测试 6/6 + 单元 11/11 = **17/17 全绿**（0.88s，看门狗未触发）
+- [x] `crates/pty-conpty/README.md`（docs-check 必需）
 - [ ] 提交 `feat: implement ConPTY backend with dynamic loading`，标签 **v0.4.0-stage3**
 
 ### 阶段 4：pty-win10-early（4-8 周）
@@ -190,3 +201,51 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
   - CI：`build-test` 在非 Linux 平台 `--exclude term-render-gtk`（GTK 权威验证在 Ubuntu），
     Linux 补装 `pkg-config`
   - 标签 **v0.3.0-stage2** 打在合回 main 的合并提交上；进入阶段 3（pty-conpty）。
+- 2026-10-05（阶段 3 进行中，会话在此暂停以便关机）：
+  - CI 修复（已提交）：`0fb69ef` 生成 JSON 改 LF（Linux docs-check 幂等）、
+    `5675262` 新增 `build-test (msys2-ucrt64-latest)` job；分支 `feature/pty-conpty`
+    已推远端（head `5675262`）→ **待查 CI run #6 结果**
+  - `e111b4f chore: whitelist proc-thread-attribute APIs needed by ConPTY`（**未推送**）
+  - 代码：`crates/pty-conpty/` 全套源码 + 6 个集成测试（工作树未提交：`Cargo.toml`/
+    `Cargo.lock` 已改、crate 未跟踪）
+  - 测试现状：单元全绿；集成 `backend_registers_and_reports_available`、
+    `interrupt_stops_long_running_child`（ETX→Ctrl+C ✅）通过；另外 4 个挂死
+  - **根因诊断（跨语言复现，非本 crate FFI 问题）**：
+    1. 结构体尺寸 104/112/24/4/8 与 SDK 一致；`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+       =0x00020016` 与 `winbase.h` 一致（`ProcThreadAttributePseudoConsole = 22`）
+    2. 伪控制台真的建起来了：`conhost.exe --headless --width 80 --height 25` 出现；
+       子进程 `title` 不改我们的标题、`mode con` 报 **25 行 × 80 列**（我们本机是
+       3000×120）→ **子进程确实挂在伪控制台上**
+    3. 但 Windows **总是把父进程 std 句柄 0/1/2 传给子进程**：`bInheritHandles=FALSE`
+       且句柄显式去掉 HANDLE_FLAG_INHERIT 仍被继承（`D:\temp\exp_prop.py`、
+       `exp_inhflag.py` 验证）→ `cmd /c echo X` 写到**父进程 stdout**，ConPTY 输出
+       管道 0 字节 → `read_until` 永远等不到 needle
+  - 实验脚本（关机后仍在 D:\temp）：`conpty_probe.py`、`exp_title.py`（title 判定）、
+    `exp_matrix.py`、`exp_prop.py`/`exp_inhflag.py`（std 继承语义）、
+    `exp_std.py`/`exp_final.py`（STARTF_USESTDHANDLES 变体）、`exp_width.py`
+  - 候选修法：`STARTF_USESTDHANDLES` + `hStd*=0`（zhiburt/conpty 做法，引
+    microsoft/terminal#4380 评论 580865346）；**但本机 Python 复现该方案时
+    `echo` 输出彻底丢失**，尚未调和 → 对照实验 `D:\temp\zctest`（conpty 0.7.0，
+    main.rs 已写好**尚未运行**）是下一步第一件事
+  - 待办：跑 zctest 对照 → 定修法 → 6/6 集成测试 → README/docs 更新 → ci-local →
+    分批提交合 main + 标签 `v0.4.0-stage3` → 推送（含 `e111b4f`）+ 查 CI run #6
+- 2026-10-05（**换机恢复** wbw/MoMo / Win11 22621，仓库迁至 `G:\wbwtty`）：
+  - 环境适配：`git safe.directory`（原属主 SID 不同报 dubious ownership）；
+    `scripts/env.ps1`/`ci-local.ps1` 重写为**按仓库盘符检测**（临时 → `G:\wbwtty-temp`、
+    Rust 默认 `C:\Users\wbw`、MSYS2 候选 `E:\吴邦玮\项目\mymsys2`）；gh CLI 已认证
+    （wbw121124，token scopes 含 repo+workflow）；MSYS2 补装 gtk3 3.24.52 + pkgconf
+    （pacman 直连失败走 127.0.0.1:7890；tuna 镜像对代理 403 → 用直连；post-transaction
+    hook 有一次非 ASCII 路径报错但不影响包落地）
+  - **对照实验（关键，调和了旧机“输出彻底丢失”的错误结论）**：
+    1. `G:\wbwtty-temp\zctest`（conpty@0.7.0，带官方修法）→ `ZTEST-OK` **PASS**；
+    2. 复跑原失败测试 → `hello-conpty` 出现在 harness 自己的 stdout、ConPTY 管道
+       0 字节 → 60s 看门狗 abort（本机复现“子进程继承父 stdout 管道”）
+  - **修法落地**：`imp.rs` spawn 处 `StartupInfo.dwFlags |= STARTF_USESTDHANDLES` +
+    `hStdInput/hStdOutput/hStdError = NULL`（`sys.rs` 补常量 0x0000_0100；
+    microsoft/terminal#4380 issuecomment-580865346 官方建议，zhiburt/conpty 同款）→
+    `cargo test -p pty-conpty` **17/17 全绿**（11 单元 + 6 集成，0.88s）
+  - 决策：`probe_output_pipe_receives_child_output` **保留**（原计划删除）——它是
+    3 秒快败的回归护栏（PeekNamedPipe 不阻塞），比 60s 看门狗挂死更早暴露修法回退
+  - CI run #6（head `5675262`）结论：docs-check / api-whitelist / windows build-test /
+    7×SDK 矩阵全绿；`build-test (msys2-ucrt64-latest)` 在 "Environment sanity" 步骤失败；
+    ubuntu/macos "Test workspace" 挂 2h13m 后被取消（run 整体 cancelled，疑手动）→ 待 gh 拉日志定位

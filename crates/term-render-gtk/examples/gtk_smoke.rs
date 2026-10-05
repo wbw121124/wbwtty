@@ -1,6 +1,6 @@
 //! GTK 链接/运行时冒烟：`gtk::init()` 成功即证明 ucrt64 GTK3 与 Rust(gnu) 链接可用。
 //!
-//! 运行：`cargo run -p term-render-gtk --example gtk_smoke`（PATH 需含 D:\msys\ucrt64\bin）。
+//! 运行：`cargo run -p term-render-gtk --example gtk_smoke`（PATH 需含 MSYS2 ucrt64 的 bin，`scripts/env.ps1` 已自动处理）。
 
 fn main() {
     match gtk::init() {

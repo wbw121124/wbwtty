@@ -172,6 +172,7 @@
 | `CreateProcessWithLogonW` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `CreateRemoteThread` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `CreateThread` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
+| `DeleteProcThreadAttributeList` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `DisconnectNamedPipe` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `DuplicateHandle` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `FlushFileBuffers` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
@@ -194,6 +195,7 @@
 | `GetThreadId` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `GetTickCount` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `GetTickCount64` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
+| `InitializeProcThreadAttributeList` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `LoadLibraryExW` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `LoadLibraryW` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `MultiByteToWideChar` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
@@ -213,6 +215,7 @@
 | `Sleep` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `SuspendThread` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `TerminateProcess` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
+| `UpdateProcThreadAttribute` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `VirtualAllocEx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `VirtualFreeEx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |
 | `WaitForMultipleObjects` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1507 |

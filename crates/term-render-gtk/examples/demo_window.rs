@@ -1,7 +1,7 @@
 //! 渲染演示窗口：内置 VT 序列动画（颜色/方块移动/局部 damage）。
 //!
 //! 运行：`cargo run -p term-render-gtk --example demo_window`
-//! （PATH 需含 `D:\msys\ucrt64\bin`；关闭窗口退出）
+//! （PATH 需含 MSYS2 ucrt64 的 bin，`scripts/env.ps1` 已自动处理；关闭窗口退出）
 
 use gtk::prelude::*;
 use std::cell::{Cell, RefCell};

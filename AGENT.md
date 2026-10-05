@@ -1,18 +1,24 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-05
+- 最近更新：2026-10-05（阶段 3 阻塞已修复、17/17 测试全绿；**换机恢复 wbw/MoMo**，文档/提交推进中）
 
 ## 当前 Git 状态
 
-- 当前分支：`main`（阶段 2 已合入，可构建）
-- 最近提交：`Merge branch 'feature/term-render-gtk'`（阶段 2 六个提交已合入）
-- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`（打在本次合并提交上）
-- 待合并分支：无（`feature/term-input`、`feature/term-render-gtk` 均已合入 main）
+- 当前分支：`feature/pty-conpty`（远端 head `5675262`，本地领先 1 提交 `e111b4f`；main 停在 `a24dbeb` 阶段 2 合并）
+- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`
+- 本地未推送提交：`e111b4f chore: whitelist proc-thread-attribute APIs needed by ConPTY`
+- 工作树未提交：`Cargo.toml`/`Cargo.lock`（pty-conpty 成员）+ 未跟踪 `crates/pty-conpty/`
+  （src/{lib,sys,cmdline,imp}.rs、tests/spawn_conpty.rs、**README.md 已写**）
+  + 本次修复（imp.rs STARTF 修法、sys.rs 常量、scripts 盘符检测、plan/AGENT 文档）
+- 其余分支均未删除（用户要求保留）：`feature/pty-core`、`feature/term-input`、
+  `feature/term-render-gtk`、`feature/vt-parser`
+- 待办：ci-local 全绿 → 分批提交 → 合 main 打 `v0.4.0-stage3` → 推送 → 修 CI run #6 遗留
 
 ## 当前阶段
 
-**阶段 2 完成**：MSYS2 → `D:\msys` ✅、term-input ✅（17 测试）、
-term-render-gtk ✅（39 测试）→ 标签 `v0.3.0-stage2`。**下一步：阶段 3 pty-conpty**。
+**阶段 2 完成**（标签 `v0.3.0-stage2`）。**阶段 3 pty-conpty 收尾中**：
+std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo test -p pty-conpty`
+**17/17 全绿**（11 单元 + 6 集成，0.88s）；剩 README 已写、docs 更新、提交/标签/CI。
 
 ## 模块划分（计划）
 
@@ -21,7 +27,7 @@ term-render-gtk ✅（39 测试）→ 标签 `v0.3.0-stage2`。**下一步：阶
 | vt-parser | VT 序列解析 + 终端状态（网格/颜色/光标/滚动缓冲/damage） | ✅ 阶段 1（58 单元 + 13 集成测试） |
 | pty-core | PTY 统一抽象（trait + C ABI），无平台实现 | ✅ 阶段 1（注册/选择/回退 + FFI，9 测试） |
 | pty-unix | openpty/forkpty 后端（Linux/macOS） | ✅ 阶段 1（POSIX 实现；Windows 空壳；unix 测试由 CI 执行） |
-| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | 未开始（阶段 3） |
+| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（修法落地，17/17 测试全绿；待提交/标签/CI） |
 | pty-win10-early | 1809 前桥接：控制台 API 直驱 / Cygwin PTY / WinPTY 回退 | 未开始（阶段 4） |
 | term-render-gtk | GTK3+Cairo/OpenGL 渲染 | ✅ 阶段 2（31 单元 + 8 集成测试；本机链接/窗口跑通） |
 | term-render-qt | Qt 渲染（可选，backlog） | backlog |
@@ -89,47 +95,95 @@ term-render-gtk ✅（39 测试）→ 标签 `v0.3.0-stage2`。**下一步：阶
    Linux 补装 `pkg-config`；docs-check 已覆盖新增 README
 6. 模块 README（`crates/term-render-gtk/README.md`）、`scripts/env.ps1`（本机会话环境）
 
-## 下一步（阶段 3：pty-conpty）
+## 进行中（阶段 3：pty-conpty）— 2026-10-05 换机恢复后已修复
 
-1. ConPTY 三函数（`CreatePseudoConsole`/`ResizePseudoConsole`/`ClosePseudoConsole`）+ 
-   `STARTUPINFOEXW`/`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` **全部运行时动态加载**
-2. 加载失败返回 `BackendUnavailable` → 上层回退 `pty-win10-early`（阶段 4 才实现，先留占位）
-3. 本机 17763 集成测试（spawn cmd / resize / Ctrl+C）
-4. 提交 `feat: implement ConPTY backend with dynamic loading`，标签 `v0.4.0-stage3`
+### 已完成
 
-## 本机持久化环境（C: 重启被清空，2026-10-05）
+1. 白名单：`tools/gen-compat-matrix.py` 的 `CURATED_KERNEL` 新增 group
+   `proc-thread-attribute`（`InitializeProcThreadAttributeList`/
+   `UpdateProcThreadAttribute`/`DeleteProcThreadAttributeList`）→ 65 static +
+   3 dynamic-only，7 版全绿；`ALLOW_LOCAL` 放行 Rust 惯用 `Some`/`Ok`/`Err`
+   （提交 `e111b4f`）
+2. `crates/pty-conpty`（已入 workspace成员）：
+   - `src/sys.rs`：repr(C) 类型/常量/白名单 `extern "system"` 块、`ConptyApi` 从
+     kernel32 **与** kernelbase 动态解析（`GetModuleHandleW` 必须收 UTF-16 宽串，
+     已修）；单测断言结构体尺寸 Coord=4 / StartUpInfoW=104 / StartUpInfoExW=112 /
+     ProcessInformation=24 / Hpc=8（x64）
+   - `src/cmdline.rs`：`quote`/`build_command_line`/`build_environment` + 7 单测
+   - `src/imp.rs`：`AttributeList`（`std::alloc` 对齐 16 的 RAII）、`spawn_conpty`
+     （拆出 `spawn_conpty_typed -> ConptyPty` 供测试取原始句柄）、`ConptyPty`
+     （PeekNamedPipe 10ms 轮询读、ETX(0x03) 作 Ctrl+C、句柄存 isize 保证 Send、
+     `release()` 统一失败清理）
+   - `tests/spawn_conpty.rs`：6 个集成测试，每个带 `watchdog(60)` → 超时 abort
+3. 测试：`cargo test -p pty-conpty` **17/17 全绿**（11 单元 + 6 集成，0.88s）
 
-- **C: 重启会还原**（依赖缓存、新增 rustup target、装的软件都会没）→ 一切持久的东西放 D:
-- Rust：`RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`（由 `C:\Users\Administrator\.rustup`
-  `.cargo` 整体复制而来，1.57GB + 0.17GB）；已装 target：windows-gnu / linux-gnu / darwin
-- 每次开新终端：`. .\scripts\env.ps1`（或依赖已写入的用户环境变量；被 C: 还原冲掉就用脚本）
-- `scripts/ci-local.ps1` 内置同样的 D: 环境兜底（CI runner 无 D:\rustup 时自动跳过）
-- 代理：crates.io 直连可用；需要时 `scripts/env.ps1` 里取消 `127.0.0.1:7890` 注释
-- 范围约定：只在 `F:\wbwtty` 内改文件，下载/解压 `D:\temp`，软件装 `D:\`，不扫 F:\ G:\ 全盘
+### 阻塞诊断与修复（2026-10-05 新机器定案）
 
-## MSYS2 环境（阶段 2 前置，2026-10-03 完成）
+- 现象：4 个集成测试挂死 → 60s watchdog abort；**`hello-conpty` 出现在 harness
+  自己的 stdout**（子进程把输出写进了父进程的 std 管道，ConPTY 管道 0 字节）
+- 根因：Windows 总是把父进程 std 句柄(0/1/2)传给子进程——`bInheritHandles=FALSE` 与
+  显式去 `HANDLE_FLAG_INHERIT` 都拦不住（旧机 exp_prop/exp_inhflag 实验）；测试
+  harness/CI/调试器下父 stdout 是管道 → `cmd /c echo` 不走 ConPTY 管道
+- **修法（已落地）**：`imp.rs` spawn 处
+  `startup.StartupInfo.dwFlags |= sys::STARTF_USESTDHANDLES` +
+  `hStdInput/hStdOutput/hStdError = NULL`（`sys.rs` 补常量 `0x0000_0100`）。
+  来源：microsoft/terminal#4380 issuecomment-580865346 官方建议；zhiburt/conpty 0.7.0
+  同款实现（其注释原话 "avoid issues when debugging or using cargo-nextest"）
+- **对照实验调和了旧机矛盾**（旧机"STARTF 后 echo 输出彻底丢失"的 Python 复现不可靠，
+  以新实验为准）：
+  1. `G:\wbwtty-temp\zctest`（conpty@0.7.0）→ 读到 `ZTEST-OK` **PASS**；
+  2. 原失败测试复现 → 输出泄漏到父 stdout、看门狗 abort；
+  3. 修法落地后 → 17/17 全绿
+- 决策：`probe_output_pipe_receives_child_output` **保留**（原计划删除）：3 秒快败
+  回归护栏（PeekNamedPipe 不阻塞），比 60s 挂死更早暴露修法回退
+- CI run #6（head `5675262`）：docs-check / api-whitelist / windows build-test /
+  7×SDK 矩阵**全绿**；`build-test (msys2-ucrt64-latest)` 在 "Environment sanity
+  (GTK3 + rustc)" 步骤**失败**；ubuntu/macos "Test workspace" 挂 2h13m 后被取消
+  （run 整体 cancelled）→ 待用 gh 拉 job 日志定位（gh 已认证）
 
-- 安装：`D:\msys`（非管理员静默 `in --root D:\msys`）；安装器
-  `msys2-x86_64-latest.exe`（GitHub nightly-x86_64 资产，85047704 B，
-  SHA-256 `7CCD43DE6EBA7ADB6686E50B5D053C848EF14D53BC66FB84C6C70EF2DF6B5B7E`）→ `D:\temp\msys2-installer.exe`
-- **包命名已重构**：`mingw-w64-ucrt64-*` → `mingw-w64-ucrt-x86_64-*`（旧名报"未找到目标"）
-- 已装：`mingw-w64-ucrt-x86_64-toolchain`（gcc 16.2.0）+ `-gtk3`（3.24.52，85 包/1.26GB）+ `-pkgconf`
-- 验证：`D:\msys\ucrt64\bin\gcc.exe --version`、`pkg-config --modversion gtk+-3.0` = 3.24.52
-- 用法：构建时 PATH 前置 `D:\msys\ucrt64\bin`（gcc/pkg-config/GTK DLL），代理 env 供 pacman
+## 本机环境（换机 wbw/MoMo，Win11 22621，2026-10-05）
+
+- 仓库：`G:\wbwtty`（旧机为 F: U盘；git 需 `safe.directory` 已配置，否则报 dubious ownership）
+- **路径一律按工作目录（仓库）所在盘符检测**：临时/下载 → `<盘符>:\wbwtty-temp`
+  （当前 `G:\wbwtty-temp`，诊断脚本与 zctest 都在此）；MSYS2 候选探测
+  `E:\吴邦玮\项目\mymsys2` → `D:\msys`
+- Rust：默认 `C:\Users\wbw\.rustup/.cargo`（rustc 1.97.1；targets：windows-gnu 默认、
+  msvc、linux-gnu；darwin 未装，ci-local 不需要）；仅当旧机 `D:\rustup`/`D:\cargo`
+  存在时脚本才会固定到 D:（兼容旧机与 CI runner）
+- 每次开新终端：`. .\scripts\env.ps1`（fresh 进程跑 ci-local 则自带等价内联）
+- 代理：127.0.0.1:7890（crates.io/GitHub 直连可用；tuna 镜像对代理 403，pacman 用直连）
+- gh CLI：`C:\Program Files\GitHub CLI`，已认证 wbw121124（scopes：repo+workflow+gist+read:org）
+- WSL：Ubuntu-22.04（WSL2，默认停止）——**仅少量用于 test**（unix 路径测试等，用户约定）
+- 范围约定：只在 `G:\wbwtty` 内改文件；下载/解压 `G:\wbwtty-temp`；不扫全盘
+
+## MSYS2 环境（2026-10-05 换机后补装 gtk3）
+
+- 本机 MSYS2 已预装于 `E:\吴邦玮\项目\mymsys2`（标准布局；`usr\bin\pacman.exe`，
+  ucrt64 gcc 16.2.0 已有）
+- 2026-10-05 补装：`pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkgconf`
+  → gtk3 **3.24.52**、pangocairo 1.58.2（tuna 镜像对代理 403 → 去掉代理直连成功；
+  post-transaction hook 有一次非 ASCII 路径报错，包本体与 pkg-config 探测正常）
+- 用法：构建时 PATH 前置 `E:\吴邦玮\项目\mymsys2\ucrt64\bin`
+  （`scripts/env.ps1` 已按候选路径自动前置）；需要时 `scripts/env.ps1` 取消代理注释
+- 旧机 MSYS2 装在 `D:\msys`（本机不存在，候选探测自然跳过）
 
 ## 已知问题 / 阻塞
 
 - 本机无 MSVC/Windows SDK → per-SDK 编译由 CI（windows-latest + ilammy/msvc-dev-cmd）承担；
   本机 `scripts/ci-local.ps1` 在 cl 不在 PATH 时自动跳过该步（已决策）
-- 本机无 gh CLI 且未认证 → 创建 GitHub 远端仓库需要一次用户认证（device flow 或 GH_TOKEN）
-- ~~MSYS2（D:\msys）尚未安装~~ ✅ 已完成（2026-10-03，见"MSYS2 环境"）
+- ~~本机无 gh CLI 且未认证~~ ✅ 已认证（wbw121124，2026-10-05）
+- ~~MSYS2 gtk3 未安装~~ ✅ 已补装 `E:\吴邦玮\项目\mymsys2`（2026-10-05，见"MSYS2 环境"）
 - ~~Rust(gnu) ↔ MSYS2 ucrt64 GTK 链接未验证~~ ✅ 已实测通过（`gtk_smoke`、`demo_window` 本机跑通）
 - CI 的 windows/macos runner 无 GTK 开发包 → `build-test` 用 `--exclude term-render-gtk`，
   GTK 渲染的权威验证在 Ubuntu + 本机 MSYS2
-- C: 重启被清空 → 工具链/缓存已迁 `D:\rustup`、`D:\cargo`，新终端跑 `. .\scripts\env.ps1`
-  （用户环境变量若被还原冲掉，以脚本为准）
-- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行；
-  本机以 linux 目标 `cargo check --all-targets` 把编译关（ci-local 步骤 4b）
+- ~~**ConPTY 阶段 3 阻塞**~~ ✅ 已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 全绿，
+  见"进行中（阶段 3）"）
+- **CI run #6 遗留（待修）**：`build-test (msys2-ucrt64-latest)` "Environment sanity" 失败、
+  ubuntu/macos "Test workspace" 挂 2h13m 被取消 → 用 gh 拉日志定位；`build-test` 缺
+  `timeout-minutes`（挂死 2h 才暴露）
+- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行，
+  或少量用 WSL Ubuntu-22.04 跑（用户约定：WSL 仅用于 test）；本机以 linux 目标
+  `cargo check --all-targets` 把编译关（ci-local 步骤 4b）
 
 ## SDK 兼容性结论（摘要，详见 docs/sdk-compat-matrix.md）
 
@@ -145,8 +199,8 @@ term-render-gtk ✅（39 测试）→ 标签 `v0.3.0-stage2`。**下一步：阶
 
 ## API 白名单摘要（详见 docs/api-whitelist.md）
 
-- static_allowed：62 个（process / thread-injection / loader / file-pipe / sync-wait /
-  console-host / string / error 分组），7 版 SDK 全部声明，允许静态链接
+- static_allowed：65 个（process / thread-injection / loader / file-pipe / sync-wait /
+  console-host / string / error / **proc-thread-attribute** 分组），7 版 SDK 全部声明，允许静态链接
 - dynamic_only：ConPTY 三函数，必须 `LoadLibrary+GetProcAddress`
 - 其余任何 Win32 函数符号禁止在 pty-win10-early/pty-conpty 静态引用；
   新增需改 `tools/gen-compat-matrix.py` 的 `CURATED_KERNEL` 重新生成（生成器拒绝任何一版缺失）
@@ -157,4 +211,5 @@ term-render-gtk ✅（39 测试）→ 标签 `v0.3.0-stage2`。**下一步：阶
 - 提交：Conventional Commits，单一逻辑变更；提交前相关模块构建+测试通过
 - 分支：main 稳定；`feature/<模块>`、`fix/<简述>`，CI 通过后合回
 - 标签：`v0.x.0-stageN`，仅打在 main；文档随代码同步更新
-- 下载与解压一律 `D:\temp`（不写 C:、不写 F:）；软件装 `D:\`；只在 `F:\wbwtty` 内改文件
+- 路径：按仓库所在盘符检测（`scripts/env.ps1`）；下载/解压 `<盘符>:\wbwtty-temp`；
+  只在 `G:\wbwtty` 内改文件；旧机历史记录（docs/header-verification.md 等）保留原文不改写

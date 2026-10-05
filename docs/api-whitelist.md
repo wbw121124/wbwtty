@@ -59,6 +59,12 @@
 - `LoadLibraryExW` — `um/libloaderapi.h`（min SDK 10.0.10240）
 - `LoadLibraryW` — `um/libloaderapi.h`（min SDK 10.0.10240）
 
+### proc-thread-attribute
+
+- `DeleteProcThreadAttributeList` — `um/processthreadsapi.h`（min SDK 10.0.10240）
+- `InitializeProcThreadAttributeList` — `um/processthreadsapi.h`（min SDK 10.0.10240）
+- `UpdateProcThreadAttribute` — `um/processthreadsapi.h`（min SDK 10.0.10240）
+
 ### process
 
 - `CreateProcessAsUserW` — `um/processthreadsapi.h`（min SDK 10.0.10240）
