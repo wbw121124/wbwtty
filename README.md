@@ -84,7 +84,7 @@ cargo test  --workspace
 # 单独构建某个模块
 cargo build -p vt-parser
 
-# 本机会话环境（C: 重启被清空，工具链/缓存固定 D:；新终端先点号引入）
+# 本机会话环境（路径按仓库盘符检测，临时目录 <盘符>:\wbwtty-temp；新终端先点号引入）
 . .\scripts\env.ps1
 
 # 本机等价 CI 子集（文档检查 + 白名单 linter + 构建/测试）
@@ -94,11 +94,12 @@ powershell -File scripts/ci-local.ps1
 平台前提：
 
 - **Linux**：`apt-get install libgtk-3-dev pkg-config`（构建 term-render-gtk 时）
-- **Windows（GTK）**：MSYS2 ucrt64 环境安装于 `D:\msys`（`pacman -S mingw-w64-ucrt-x86_64-gtk3`），
-  构建/运行前把 `D:\msys\ucrt64\bin` 前置到 PATH（`scripts/env.ps1` 已处理）
+- **Windows（GTK）**：MSYS2 ucrt64（本机 `E:\吴邦玮\项目\mymsys2`，`pacman -S
+  mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkgconf`），构建/运行前把
+  `<MSYS2>\ucrt64\bin` 前置到 PATH（`scripts/env.ps1` 按候选路径自动处理）
 - **Windows 后端**：1809+ 自动使用 ConPTY；更早版本使用 `pty-win10-early`
-- **本机持久化**：C: 重启被清空 → `RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`，
-  依赖缓存不会随重启丢失；CI 的 Windows/macOS 无 GTK 开发包时排除 `term-render-gtk`（Ubuntu 权威验证）
+- **本机环境**：Rust 用默认 `~/.rustup`/`~/.cargo`，临时/下载在 `<仓库盘符>:\wbwtty-temp`；
+  CI 的 Windows/macOS 无 GTK 开发包时排除 `term-render-gtk`（Ubuntu 权威验证）
 
 ## SDK 兼容性（阶段 0 成果）
 

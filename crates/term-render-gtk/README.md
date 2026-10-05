@@ -38,7 +38,8 @@ resize 联动。最近更新：2026-10-05。
 ## 构建要求
 
 - Linux/macOS 之外的本机：`pkg-config` 必须能找到 `pangocairo`
-  （Windows/MSYS2：`D:\msys\ucrt64\bin` 前置 PATH，已装 `mingw-w64-ucrt-x86_64-gtk3`）
+  （Windows/MSYS2：`<MSYS2>\ucrt64\bin` 前置 PATH，已装 `mingw-w64-ucrt-x86_64-gtk3`；
+  `scripts/env.ps1` 按候选路径自动前置）
 - 运行需要 GTK3 动态库在同一 PATH 上
 - 本 crate 的 `build.rs` 用 pkg-config 探测 `pangocairo` 并链接 `libpangocairo-1.0`
 
