@@ -4,6 +4,7 @@ members = [
     "crates/vt-parser",
     "crates/pty-core",
     "crates/pty-unix",
+    "crates/pty-conpty",
     "crates/term-input",
     "crates/term-render-gtk",
 ]

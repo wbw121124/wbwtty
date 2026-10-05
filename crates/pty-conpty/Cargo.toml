@@ -1,0 +1,9 @@
+[package]
+name = "pty-conpty"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "ConPTY backend (Windows 10 1809+, dynamically loaded); no-op stub elsewhere"
+
+[dependencies]
+pty-core = { path = "../pty-core" }
