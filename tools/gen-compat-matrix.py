@@ -51,6 +51,11 @@ CURATED_KERNEL: dict[str, list[str]] = {
         "WriteProcessMemory", "ReadProcessMemory", "GetThreadContext",
         "SetThreadContext",
     ],
+    # ConPTY 属性列表：EXTENDED_STARTUPINFO_PRESENT + PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+    "proc-thread-attribute": [
+        "InitializeProcThreadAttributeList", "UpdateProcThreadAttribute",
+        "DeleteProcThreadAttributeList",
+    ],
     "loader": [
         "LoadLibraryW", "LoadLibraryExW", "FreeLibrary", "GetProcAddress",
         "GetModuleHandleW", "GetModuleHandleExW",

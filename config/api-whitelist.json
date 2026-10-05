@@ -96,6 +96,21 @@
       "min_sdk": "10.0.10240",
       "declared_in": "um/processthreadsapi.h"
     },
+    "InitializeProcThreadAttributeList": {
+      "group": "proc-thread-attribute",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "UpdateProcThreadAttribute": {
+      "group": "proc-thread-attribute",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
+    "DeleteProcThreadAttributeList": {
+      "group": "proc-thread-attribute",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processthreadsapi.h"
+    },
     "LoadLibraryW": {
       "group": "loader",
       "min_sdk": "10.0.10240",
