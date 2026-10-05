@@ -4,11 +4,10 @@
 
 ## 当前 Git 状态
 
-- 当前分支：`feature/term-render-gtk`（阶段 2 收尾；main 停在 `feature/term-input` 合并提交）
-- 最近提交：阶段 2 系列（`feat:` 渲染器 / `test:` 管线测试 / `docs:` 模块 README /
-  `ci:` GTK 平台矩阵 / `docs:` 阶段收尾，精确哈希见 `git log`）
-- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`（合回 main 的合并提交）
-- 待合并分支：`feature/term-render-gtk`
+- 当前分支：`main`（阶段 2 已合入，可构建）
+- 最近提交：`Merge branch 'feature/term-render-gtk'`（阶段 2 六个提交已合入）
+- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`（打在本次合并提交上）
+- 待合并分支：无（`feature/term-input`、`feature/term-render-gtk` 均已合入 main）
 
 ## 当前阶段
 
