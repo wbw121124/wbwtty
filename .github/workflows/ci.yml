@@ -111,6 +111,10 @@ jobs:
     name: build-test (msys2-ucrt64-latest)
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # rustup 主机是 msvc、构建 target 是 gnu → pkg-config crate 视为交叉编译，
+      # 而 MSYS2 的 pkg-config 本就为目标环境准备 → 放行（否则 glib-sys 等 build script 直接失败）
+      PKG_CONFIG_ALLOW_CROSS: '1'
     defaults:
       run:
         shell: msys2 {0}
