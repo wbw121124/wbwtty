@@ -14,6 +14,7 @@ jobs:
   # ---------- 文档存在性与一致性（规格：CI 必须检查 AGENT.md/plan.md/各模块 README） ----------
   docs-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Required docs exist and are non-empty
@@ -54,6 +55,7 @@ jobs:
   # ---------- API 白名单 linter（规格：白名单外 API 必须动态加载） ----------
   api-whitelist:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: check_api_whitelist
@@ -66,6 +68,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -107,6 +110,7 @@ jobs:
   build-test-msys2:
     name: build-test (msys2-ucrt64-latest)
     runs-on: windows-latest
+    timeout-minutes: 30
     defaults:
       run:
         shell: msys2 {0}
@@ -126,12 +130,16 @@ jobs:
       - name: Environment sanity (GTK3 + rustc)
         run: |
           set -eu
+          # MSYS2 shell 不继承 GITHUB_PATH 注入的 rustup 目录 → 显式前置（run #7/8 曾 rustc not found）
+          export PATH="$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"
           pkg-config --modversion gtk+-3.0 pangocairo
           gcc --version | head -n 1
           rustc -vV
+          cargo -V
       - name: Build workspace (ucrt64)
         run: |
           set -eu
+          export PATH="$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"
           if [ -f Cargo.toml ]; then
             cargo build --workspace --all-targets --target x86_64-pc-windows-gnu
           else
@@ -140,6 +148,7 @@ jobs:
       - name: Test workspace (ucrt64)
         run: |
           set -eu
+          export PATH="$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"
           if [ -f Cargo.toml ]; then
             cargo test --workspace --target x86_64-pc-windows-gnu
           else
@@ -149,6 +158,7 @@ jobs:
   # ---------- 管道模式 MVP 冒烟（阶段1起；Windows 上用 python 启动验证桥接） ----------
   pipe-mvp:
     runs-on: windows-latest
+    timeout-minutes: 20
     needs: build-test
     if: success()
     steps:
@@ -166,6 +176,7 @@ jobs:
   # ---------- pty-win10-early per-SDK 编译矩阵（规格：7 个早期 SDK 逐一 cl 编译） ----------
   sdk-compile-matrix:
     runs-on: windows-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

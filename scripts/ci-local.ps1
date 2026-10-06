@@ -17,19 +17,9 @@ param([switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
-# 路径按仓库所在盘符探测（scripts/env.ps1 的等价内联，fresh 进程自包含）：
-# - 临时目录 <盘符>:\wbwtty-temp；- Rust 默认位置，仅旧机器 D: 目录存在时才固定
-#   （CI runner 无 D:\rustup 时自动跳过，不影响 GitHub Actions）；- MSYS2 候选探测
-$repoDrive = (Split-Path -Qualifier $repo)
-$env:WBWTTY_TEMP = Join-Path "$repoDrive\" 'wbwtty-temp'
-if (Test-Path 'D:\rustup') { $env:RUSTUP_HOME = 'D:\rustup' }
-if (Test-Path 'D:\cargo') { $env:CARGO_HOME = 'D:\cargo' }
-if (Test-Path 'D:\cargo\bin') { $env:Path = 'D:\cargo\bin;' + $env:Path }
-$msysBin = @(
-    'E:\吴邦玮\项目\mymsys2\ucrt64\bin',
-    'D:\msys\ucrt64\bin'
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($msysBin) { $env:Path = "$msysBin;" + $env:Path }
+# 环境全部由 scripts/env.ps1 提供（项目盘符优先的候选探测：WBWTTY_TEMP / RUSTUP_HOME /
+# CARGO_HOME / MSYS2；候选不存在自动跳过，CI runner 无 D: 目录也不受影响）：
+. (Join-Path $PSScriptRoot 'env.ps1')
 $fail = 0
 
 function Step($name, [scriptblock]$fn) {

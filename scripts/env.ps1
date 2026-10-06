@@ -1,38 +1,49 @@
-<#
+﻿<#
 .SYNOPSIS
-  本机会话环境（路径按仓库所在盘符自动探测，不写死盘符）。
+  本机会话环境（所有路径按**项目所在盘符**探测，不写死盘符）。
 .DESCRIPTION
   用法（点号引入，避免子 shell）：
       . .\scripts\env.ps1
   之后 `cargo` / `rustup` / `pkg-config` / `gcc` 均可用。
   约定：
-  - 临时/下载目录：$env:WBWTTY_TEMP = <仓库所在盘符>:\wbwtty-temp
-  - Rust：默认用 ~/.rustup、~/.cargo；仅当旧机器固定目录（D:\rustup、D:\cargo）
-    存在时才沿用（兼容 CI runner / 旧机器，不存在则完全不动）
-  - MSYS2：按候选路径探测（本机 E:\吴邦玮\项目\mymsys2，旧机器 D:\msys）
+  - 临时/下载目录：$env:WBWTTY_TEMP = <项目盘符>:\wbwtty-temp
+  - 环境变量一律「项目盘符优先、旧机器固定路径兜底」的候选探测：
+      RUSTUP_HOME  <盘符>:\rustup  → D:\rustup
+      CARGO_HOME   <盘符>:\cargo   → D:\cargo   （都不存在则不设置，用 ~/.rustup ~/.cargo）
+      MSYS2        <盘符>:\msys\ucrt64\bin → E:\吴邦玮\项目\mymsys2\ucrt64\bin → D:\msys\ucrt64\bin
+    候选不存在则自动跳过（CI runner / 换机都不会误设）。
 #>
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$repoDrive = (Split-Path -Qualifier $repoRoot)   # 例如 G:
+$repoDrive = (Split-Path -Qualifier $repoRoot)   # 例如 F:
 
-# 临时目录：仓库同盘 <盘符>:\wbwtty-temp
+# 临时目录：项目同盘 <盘符>:\wbwtty-temp
 $env:WBWTTY_TEMP = Join-Path "$repoDrive\" 'wbwtty-temp'
 if (-not (Test-Path $env:WBWTTY_TEMP)) {
     New-Item -ItemType Directory -Path $env:WBWTTY_TEMP | Out-Null
 }
 
-# Rust：默认位置已在 PATH / 注册表；仅旧机器 D: 目录存在时才固定
-if (Test-Path 'D:\rustup') { $env:RUSTUP_HOME = 'D:\rustup' }
-if (Test-Path 'D:\cargo') { $env:CARGO_HOME = 'D:\cargo' }
-if (Test-Path 'D:\cargo\bin') { $env:Path = 'D:\cargo\bin;' + $env:Path }
+# 候选探测助手：取第一个存在的路径，全无则 $null
+function Get-FirstExisting([string[]]$Candidates) {
+    @($Candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1)
+}
+
+# Rust：项目盘符优先，D: 为旧机器兜底；都没有则保持默认（~/.rustup、~/.cargo）
+$rustupHome = Get-FirstExisting @((Join-Path $repoDrive '\rustup'), 'D:\rustup')
+if ($rustupHome) { $env:RUSTUP_HOME = $rustupHome }
+$cargoHome = Get-FirstExisting @((Join-Path $repoDrive '\cargo'), 'D:\cargo')
+if ($cargoHome) { $env:CARGO_HOME = $cargoHome }
+$cargoBin = Get-FirstExisting @((Join-Path $repoDrive '\cargo\bin'), 'D:\cargo\bin')
+if ($cargoBin) { $env:Path = "$cargoBin;" + $env:Path }
 elseif (Test-Path (Join-Path $env:USERPROFILE '.cargo\bin')) {
     $env:Path = (Join-Path $env:USERPROFILE '.cargo\bin') + ';' + $env:Path
 }
 
-# MSYS2 ucrt64：按候选路径探测，取第一个存在的
-$msysBin = @(
+# MSYS2 ucrt64：项目盘符优先，旧机器路径兜底
+$msysBin = Get-FirstExisting @(
+    (Join-Path $repoDrive '\msys\ucrt64\bin'),
     'E:\吴邦玮\项目\mymsys2\ucrt64\bin',
     'D:\msys\ucrt64\bin'
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+)
 if ($msysBin) { $env:Path = "$msysBin;" + $env:Path }
 
 # 需要走代理时（pacman / 非直连下载）再取消注释：
