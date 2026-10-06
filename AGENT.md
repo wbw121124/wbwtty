@@ -1,25 +1,23 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-06（**阶段 3 收尾完成：round 3 合入 main `efcbc82` → run #11 CI
-  12/12 job 全绿 → 阶段 3 关闭**，下一步阶段 4 pty-win10-early）
-- 上次更新：2026-10-06（round 3：run #10 后定案 interrupt 根因——`CREATE_NEW_PROCESS_GROUP`
-  祖先隐式“忽略 Ctrl+C”**可继承** → 测试 spawn 前清继承 ignore；CTRL_BREAK 兜底弯路已弃）
+- 最近更新：2026-10-06（**阶段 4 pty-win10-early 开工**：会话恢复到 MoMo 机 `G:\wbwtty`，
+  分支 `feature/pty-win10-early`，开工增量 + 直驱起步）
+- 上次更新：2026-10-06（阶段 3 收尾：run #11/#12 12/12 全绿、阶段 3 关闭）
 
 ## 当前 Git 状态
 
-- 当前分支：`main`（阶段 3 全部合入并推送；阶段 4 从新 feature 分支开工）
-- main = `efcbc82`（`Merge branch 'fix/ci-stage3-green'`，round 3 `fix:` + `docs:` 已推送）
-  → **run #11 CI 12/12 job 全绿**（windows/msys2 interrupt 修复生效）
+- 当前分支：`feature/pty-win10-early`（自 main `1968c3e` 拉出，阶段 4 开工分支）
+- main = `1968c3e`（run #12 12/12 全绿的阶段 3 收尾提交，已推送）
 - 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`、`v0.4.0-stage3`
-- 工作树干净；所有分支保留（用户要求）：`fix/ci-stage3-green`、`feature/pty-core`、
-  `feature/term-input`、`feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
-- 待办：阶段 4 pty-win10-early（plan.md §阶段 4 清单）
+- 工作树干净；所有分支保留（用户要求）：`fix/ci-stage3-green`、`feature/pty-conpty`、
+  `feature/pty-core`、`feature/term-input`、`feature/term-render-gtk`、`feature/vt-parser`
+- 待办：阶段 4 pty-win10-early（plan.md §阶段 4 清单；本会话 = 开工增量 + 直驱起步）
 
 ## 当前阶段
 
-**阶段 3 pty-conpty 完成**：代码合 main + 标签 `v0.4.0-stage3`，CI round 1–3 修复后
-**run #11 12/12 全绿**（见“CI run #10 与 round 3”末段）→ **阶段 3 关闭**，
-下一步进入**阶段 4 pty-win10-early**。
+**阶段 3 pty-conpty 完成**（`v0.4.0-stage3`，run #11/#12 全绿）→
+**阶段 4 pty-win10-early 进行中**：设计文档（win10-early-bridge / ipc-signal-protocol）→
+白名单扩展 console API → crate 骨架 + csrc 首垫片（CI per-SDK 真实编译）→ 直驱第一刀最小闭环。
 
 ## 模块划分（计划）
 
@@ -218,34 +216,35 @@ build-test（windows 40s / macos 26s / ubuntu 1m1s / msys2 3m35s，windows 与 m
 `interrupt_stops_long_running_child` 均过）、pipe-mvp；fix 分支同内容 run 亦 success
 → **阶段 3 关闭**。
 
-## 本机环境（当前机器，2026-10-06；非 MoMo）
+## 本机环境（当前机器 wbw/MoMo，Win11 专业版 22621，2026-10-06 回到本机）
 
-- OS：**Windows 10 企业版 LTSC（build 10.0.17763 / 1809）**→ ConPTY 本机可用；
-  **本机无 WSL**（`wsl.exe` 不存在）→ unix 集成测试只由 CI 执行
-- 仓库：`F:\wbwtty`；临时/下载：`F:\wbwtty-temp`
-- Rust：`RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`（cargo/rustc **1.99.0**、
-  rustup 1.29.0，toolchain `stable-x86_64-pc-windows-gnu`，含 linux-gnu target 供交叉检查）
-- MSYS2：`D:\msys`（ucrt64，阶段 2 起的 gtk3 安装；workspace 构建已验证）
+- OS：**Windows 11 专业版 22621**（ConPTY 可用；Win11 本机可直接实测阶段 4 直驱路径——
+  直驱不依赖 <1809，测试强制走 early backend）
+- 仓库：`G:\wbwtty`（可移动盘 U 盘）；临时/下载：`G:\wbwtty-temp`
+- Rust：**默认 `C:\Users\wbw\.rustup/.cargo`**（cargo/rustc **1.97.1**）；env.ps1 探测
+  `G:\rustup`/`D:\rustup` 均不存在 → 不设 RUSTUP_HOME/CARGO_HOME，用默认
+- MSYS2：`E:\吴邦玮\项目\mymsys2`（ucrt64；env.ps1 候选命中，gtk3 3.24.52 已装）
+- WSL：**Ubuntu-22.04（WSL2，默认 stopped）**——G: 为可移动盘 WSL 不自动挂载，
+  且 sudo 密码未知 → unix 集成测试仍以 **CI 为权威**（用户约定：WSL 仅少量用于 test）
 - **路径/环境变量一律「项目盘符优先、旧机固定路径兜底」的候选探测**（`scripts/env.ps1`，
   `ci-local.ps1` 点号引入同一份逻辑，候选不存在自动跳过）；**`.ps1` 必须 UTF-8 带 BOM**
-  （PS 5.1 无 BOM 按 GBK 解码会吞换行——env.ps1 曾因此语法错）
-- 每次开新终端：`. .\scripts\env.ps1`（输出应见 `rustup=D:\rustup cargo=D:\cargo
-  msys=D:\msys\ucrt64\bin`）
-- 代理：127.0.0.1:7890（crates.io/GitHub 直连可用）
-- gh CLI：已认证 wbw121124（scopes 含 repo/workflow；仓库 public，未认证 REST 也可读结论，
-  job logs 需认证）
-- 换机历史：2026-10-05 wbw/MoMo（Win11 22621、`G:\wbwtty`）→ 2026-10-06 回到本机
-  （`F:\wbwtty`；旧记录保留在 §"Linux GTK 实测"与 plan.md §6）
-- 范围约定：只在 `F:\wbwtty` 内改文件；下载/解压 `F:\wbwtty-temp`；不扫全盘
+- 每次开新终端：`. .\scripts\env.ps1`（MoMo 上输出应见 `temp=G:\wbwtty-temp
+  msys=E:\吴邦玮\项目\mymsys2\ucrt64\bin rustup= cargo=`，后两者空 = 用默认）
+- 代理：127.0.0.1:7890（crates.io/GitHub 直连可用；curl 下载大文件建议带 `-x` 走代理）
+- gh CLI：已认证 wbw121124（scopes 含 repo/workflow；job logs 需认证 + 可能需代理）
+- 换机历史：2026-10-05 wbw/MoMo（`G:\wbwtty`）→ 2026-10-06 Win10 LTSC 17763（`F:\wbwtty`，
+  无 WSL，阶段 3 CI 收尾在此完成）→ 2026-10-06 回到 MoMo（`G:\wbwtty`；LTSC 会话记录
+  备份在 `F:\plans\ses_ef017e465ffe*.json`）；旧记录保留在 §"Linux GTK 实测"与 plan.md §6
+- 范围约定：只在 `G:\wbwtty` 内改文件；下载/解压 `G:\wbwtty-temp`；不扫全盘
 
-## MSYS2 环境（本机 `D:\msys`）
+## MSYS2 环境（当前机器 `E:\吴邦玮\项目\mymsys2`）
 
-- 本机（Win10 LTSC，2026-10-06）：MSYS2 在 **`D:\msys`**（ucrt64；阶段 2 安装并补装
-  gtk3/pkgconf）→ `scripts/env.ps1` 候选探测 `<盘符>:\msys` 不存在 → 命中 `D:\msys` 前置
-  PATH；本机 workspace 构建（含 term-render-gtk）已验证可用（ci-local 全绿）
-- 历史（2026-10-05 wbw/MoMo 机）：MSYS2 预装 `E:\吴邦玮\项目\mymsys2`（ucrt64 gcc 16.2.0），
-  补装 `mingw-w64-ucrt-x86_64-gtk3 pkgconf` → gtk3 **3.24.52**、pangocairo 1.58.2
-  （tuna 镜像对代理 403 → 去代理直连成功）；该路径仍保留在 env.ps1 候选列表中
+- 本机（MoMo，2026-10-06 回到本机）：MSYS2 预装 **`E:\吴邦玮\项目\mymsys2`**（ucrt64，
+  gcc 16.2.0，gtk3 3.24.52 + pkgconf 为 2026-10-05 补装）→ `scripts/env.ps1` 候选
+  `<盘符>:\msys` 不存在 → 命中该路径前置 PATH；本机 workspace 构建（含 term-render-gtk）
+  已验证可用（ci-local 全绿）
+- 历史（2026-10-06 Win10 LTSC 机）：MSYS2 在 `D:\msys`（阶段 2 安装，gtk3/pkgconf 同套），
+  env.ps1 候选列表末位，本机不存在时自动跳过
 
 ## Linux GTK 实测（Ubuntu 20.04，2026-10-06）
 
@@ -281,8 +280,9 @@ build-test（windows 40s / macos 26s / ubuntu 1m1s / msys2 3m35s，windows 与 m
 - ~~**CI run #6–#10 失败（probe 竞态 / msys2 PATH / unix 挂死 6h / env 竞态 / interrupt
   继承 ignore）**~~ ✅ round 1–3 全部修复合入 main，**run #11 12/12 job 全绿**（2026-10-06，
   见“CI run #10 与 round 3”）
-- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行
-  （**本机无 WSL**，用户原约定的"WSL 仅用于 test"在本机不适用）；本机以 linux 目标
+- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行；
+  MoMo 机有 WSL Ubuntu-22.04 但 G: 为可移动盘不自动挂载且 sudo 密码未知 →
+  仍以 **CI 为权威**（用户约定：WSL 仅少量用于 test）；本机以 linux 目标
   `cargo check --all-targets` 把编译关（ci-local 步骤 4b）
 
 ## SDK 兼容性结论（摘要，详见 docs/sdk-compat-matrix.md）
@@ -312,5 +312,5 @@ build-test（windows 40s / macos 26s / ubuntu 1m1s / msys2 3m35s，windows 与 m
 - 分支：main 稳定；`feature/<模块>`、`fix/<简述>`，CI 通过后合回
 - 标签：`v0.x.0-stageN`，仅打在 main；文档随代码同步更新
 - 路径：**项目盘符优先的候选探测**（`scripts/env.ps1`，`ci-local.ps1` 点号引入同一份逻辑，
-  候选缺失自动跳过）；下载/解压 `<项目盘符>:\wbwtty-temp`；只在当前仓库 `F:\wbwtty` 内改文件；
+  候选缺失自动跳过）；下载/解压 `<项目盘符>:\wbwtty-temp`；只在当前仓库 `G:\wbwtty` 内改文件；
   **`.ps1` 必须 UTF-8 带 BOM**；旧机历史记录（docs/header-verification.md 等）保留原文不改写

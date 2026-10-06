@@ -1,7 +1,7 @@
 # wbwtty — 跨平台终端框架
 
-- 最近更新：2026-10-05
-- 状态：阶段 0/1/2 完成 → `v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`（阶段 3 pty-conpty 待开始）
+- 最近更新：2026-10-06
+- 状态：阶段 0/1/2/3 完成 → `v0.1.0-stage0`…`v0.4.0-stage3`（阶段 4 pty-win10-early 开工）
 - 平台：Windows 10（含 1809 之前）/ Windows 11 / Linux / macOS
 
 模块化终端框架：统一 PTY 抽象 + VT 解析 + GPU/GTK 渲染 + 输入编码，

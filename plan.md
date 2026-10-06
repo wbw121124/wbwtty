@@ -1,11 +1,9 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-06（**阶段 3 收尾完成：round 3 合入 main `efcbc82` → run #11 CI
-  12/12 job 全绿 → 阶段 3 关闭**，进入阶段 4 pty-win10-early）
-- 上次更新：2026-10-06（round 3：run #10 后定案 interrupt 根因——runner 启动链
-  `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清继承 ignore）
-- 当前阶段：**阶段 3 pty-conpty 完成**（代码合 main + 标签 `v0.4.0-stage3`；CI round 1–3
-  修复后 run #11 **12/12 job 全绿**，见 §6）→ **阶段 4 pty-win10-early**（清单见下）
+- 最近更新：2026-10-06（**阶段 4 pty-win10-early 开工**，会话恢复到 MoMo 机 `G:\wbwtty`）
+- 上次更新：2026-10-06（阶段 3 收尾：round 3 合 main → run #11/#12 12/12 全绿 → 阶段 3 关闭）
+- 当前阶段：**阶段 3 完成**（`v0.4.0-stage3`，run #11/#12 全绿）→ **阶段 4 pty-win10-early
+  进行中**（本会话：开工增量 + 直驱起步，清单见下）
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -18,18 +16,18 @@ GPU 加速渲染，模块化可独立复用，全程 Git + Conventional Commits 
 | 决策点 | 结论 |
 |---|---|
 | SDK 头文件获取 | ralish/win-headers 快照为 7 版本权威来源 + 官方安装器（10240、17763）静默安装交叉校验 |
-| 下载/解压位置 | **按仓库所在盘符自动检测**（`scripts/env.ps1`/`ci-local.ps1`）→ `<盘符>:\wbwtty-temp`（当前仓库在 F:，即 `F:\wbwtty-temp`）；网络代理 127.0.0.1:7890 可用 |
+| 下载/解压位置 | **按仓库所在盘符自动检测**（`scripts/env.ps1`/`ci-local.ps1`）→ `<盘符>:\wbwtty-temp`（当前仓库在 G:，即 `G:\wbwtty-temp`）；网络代理 127.0.0.1:7890 可用 |
 | per-SDK 编译检查 | 真实编译矩阵在 GitHub Actions windows-latest（MSVC cl）；本机用 Python 白名单 linter |
 | CI 平台 | GitHub Actions（.github/workflows/ci.yml）+ 创建远端仓库并推送 |
 | GTK 渲染 | 本机已有 MSYS2（`E:\吴邦玮\项目\mymsys2`，ucrt64），2026-10-05 补装 gtk3+pkgconf；CI Ubuntu 为权威验证 |
 | 执行范围 | 阶段 0→5 严格顺序推进，每阶段提交+标签后进入下一阶段 |
 | Git 身份 | wbw121124 <wbw121124@163.com>（仅仓库 local 配置） |
-| 本机持久化 | **项目盘符优先的候选探测**（`scripts/env.ps1`，`ci-local.ps1` 点号引入同一份逻辑）：临时/下载 → `<盘符>:\wbwtty-temp`；`RUSTUP_HOME` `<盘符>:\rustup`→`D:\rustup`、`CARGO_HOME` `<盘符>:\cargo`→`D:\cargo`、MSYS2 `<盘符>:\msys`→`E:\吴邦玮\项目\mymsys2`→`D:\msys`（候选不存在自动跳过）；**`.ps1` 必须 UTF-8 带 BOM**（PS 5.1 无 BOM 按 GBK 解码会吞换行）；git 按需 safe.directory；换机历史见 §6（2026-10-05 wbw/MoMo → 2026-10-06 Win10 LTSC 17763 机器、仓库 `F:\wbwtty`） |
+| 本机持久化 | **项目盘符优先的候选探测**（`scripts/env.ps1`，`ci-local.ps1` 点号引入同一份逻辑）：临时/下载 → `<盘符>:\wbwtty-temp`；`RUSTUP_HOME` `<盘符>:\rustup`→`D:\rustup`、`CARGO_HOME` `<盘符>:\cargo`→`D:\cargo`、MSYS2 `<盘符>:\msys`→`E:\吴邦玮\项目\mymsys2`→`D:\msys`（候选不存在自动跳过）；**`.ps1` 必须 UTF-8 带 BOM**（PS 5.1 无 BOM 按 GBK 解码会吞换行）；git 按需 safe.directory；换机历史见 §6（2026-10-05 wbw/MoMo `G:\wbwtty` → 2026-10-06 Win10 LTSC 17763 机器 `F:\wbwtty` → 2026-10-06 回到 MoMo `G:\wbwtty`） |
 
 ## 2. 仓库结构
 
 ```
-F:\wbwtty\
+G:\wbwtty\
 ├── .gitignore  AGENT.md  plan.md  README.md  Cargo.toml (workspace)
 ├── .github/workflows/ci.yml
 ├── tools/                      # 阶段0脚本
@@ -93,7 +91,7 @@ F:\wbwtty\
       `demo_window` 窗口截图核验，详见 §6 与 AGENT.md"Linux GTK 实测"
 - [x] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
 
-### 阶段 3：pty-conpty（2-3 周）— 代码/文档/标签已交付，CI 修复已提交（待 CI 全绿后关闭）
+### 阶段 3：pty-conpty（2-3 周）— 完成（run #11/#12 全绿，标签 v0.4.0-stage3）
 - [x] 白名单扩展：`proc-thread-attribute` 三函数（Initialize/Update/Delete）入 CURATED_KERNEL
       → 65 static + 3 dynamic-only，7 版全绿（提交 `e111b4f`）
 - [x] `crates/pty-conpty` 骨架 + 动态加载：`src/sys.rs`（repr(C) 类型/白名单 extern/
