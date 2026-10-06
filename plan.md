@@ -1,14 +1,11 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-06（阶段 3 收尾 **round 3**：run #10 后定案 interrupt 根因——runner
-  启动链 `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清继承
-  ignore 即修；本地 0x200 标志精确复现）
-- 上次更新：2026-10-06（round 2：run #9 复盘——conpty env/cwd 读竞态 + interrupt 重发 ETX、
-  macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
-- 当前阶段：**阶段 2 完成**（`v0.3.0-stage2`）→ **阶段 3 pty-conpty 已合 main 并打标签
-  `v0.4.0-stage3`**；round 1+2 合入 main `2d79f4c` 推送后 run #10 **10 job 绿 / 2 job 红**
-  （仅 `interrupt_stops_long_running_child` 在 windows-latest 与 msys2 双挂 → round 3 根因
-  修复待合入推送）→ CI 全绿后关闭阶段 3、进入阶段 4
+- 最近更新：2026-10-06（**阶段 3 收尾完成：round 3 合入 main `efcbc82` → run #11 CI
+  12/12 job 全绿 → 阶段 3 关闭**，进入阶段 4 pty-win10-early）
+- 上次更新：2026-10-06（round 3：run #10 后定案 interrupt 根因——runner 启动链
+  `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清继承 ignore）
+- 当前阶段：**阶段 3 pty-conpty 完成**（代码合 main + 标签 `v0.4.0-stage3`；CI round 1–3
+  修复后 run #11 **12/12 job 全绿**，见 §6）→ **阶段 4 pty-win10-early**（清单见下）
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -121,7 +118,8 @@ F:\wbwtty\
 - [x] run #10 复盘 round 3 修复（同分支续）：interrupt 根因 = `CREATE_NEW_PROCESS_GROUP`
       祖先隐式 `SetConsoleCtrlHandler(NULL,TRUE)` 且**可继承** → 测试 spawn 前清继承 ignore
       （本地 0x200 标志精确复现；CTRL_BREAK 兜底弯路已弃，见 §6）
-- [ ] CI 全绿确认（push 后监控）→ 关闭阶段 3、进入阶段 4
+- [x] CI 全绿确认：run #11（main `efcbc82`）**12/12 job 成功**（2026-10-06）→
+      **阶段 3 关闭**、进入阶段 4
 
 ### 阶段 4：pty-win10-early（4-8 周）
 - [ ] a) 控制台 API 直驱：隐藏控制台 host + CREATE_SUSPENDED 注入 conhook.dll +
@@ -349,3 +347,12 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
     ConPTY 子进程收到 Ctrl+C
   - 本机验证：`cargo test -p pty-conpty` 6/6（含单元 17/17）×2、flag=0x200 复现条件 ×2、
     新增代码 fmt 干净（仓库其余 fmt 漂移为既有、CI 不检查）、ci-local **PASSED**
+- 2026-10-06（**round 3 推送后 run #11 CI 全绿，阶段 3 关闭**）：
+  - round 3 合入 main（`efcbc82`，`--no-ff`：`fix: clear inherited Ctrl+C ignore before
+    conpty interrupt test` + `docs: record CI run #10 results and round-3 interrupt root
+    cause`）并推送（main + fix 分支）
+  - run #11：**12/12 job 全绿**——docs-check、api-whitelist、7×SDK 矩阵、build-test
+    （windows 40s / macos 26s / ubuntu 1m1s / msys2 3m35s）、pipe-mvp；windows 与 msys2 的
+    `interrupt_stops_long_running_child` 均通过（round 3 修复生效）；fix 分支同内容 run
+    亦 success
+  - **阶段 3 正式关闭**；下一步进入阶段 4 pty-win10-early

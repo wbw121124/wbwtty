@@ -1,29 +1,25 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-06（阶段 3 收尾 **round 3**：run #10 后定案 interrupt 根因——runner
-  启动链 `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清
-  继承 ignore；本地 0x200 标志精确复现，CTRL_BREAK 兜底弯路已弃）
-- 上次更新：2026-10-06（round 2：run #9 复盘——conpty env 读竞态 + interrupt 重发 ETX、
-  macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
+- 最近更新：2026-10-06（**阶段 3 收尾完成：round 3 合入 main `efcbc82` → run #11 CI
+  12/12 job 全绿 → 阶段 3 关闭**，下一步阶段 4 pty-win10-early）
+- 上次更新：2026-10-06（round 3：run #10 后定案 interrupt 根因——`CREATE_NEW_PROCESS_GROUP`
+  祖先隐式“忽略 Ctrl+C”**可继承** → 测试 spawn 前清继承 ignore；CTRL_BREAK 兜底弯路已弃）
 
 ## 当前 Git 状态
 
-- 当前分支：`fix/ci-stage3-green`（round 3 修复与文档提交于此，随后 `--no-ff` 合 main 并推送）
-- main = `2d79f4c`（`Merge branch 'fix/ci-stage3-green'`，round 2 四提交已推送）→ run #10：
-  **10 job 绿 / 2 job 红**（仅 interrupt 在 windows-latest + msys2 双挂，round 3 已根因修复）
+- 当前分支：`main`（阶段 3 全部合入并推送；阶段 4 从新 feature 分支开工）
+- main = `efcbc82`（`Merge branch 'fix/ci-stage3-green'`，round 3 `fix:` + `docs:` 已推送）
+  → **run #11 CI 12/12 job 全绿**（windows/msys2 interrupt 修复生效）
 - 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`、`v0.4.0-stage3`
-- 本轮工作树改动：`crates/pty-conpty/tests/spawn_conpty.rs`（interrupt spawn 前清继承
-  `SetConsoleCtrlHandler(NULL,FALSE)`）、`plan.md`/`AGENT.md`（run #10 与 round 3 记录）
-- 其余分支均未删除（用户要求保留）：`feature/pty-core`、`feature/term-input`、
-  `feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
-- 待办：fix 分支提交（`fix:` + `docs:`）→ 合 main → 推送 → gh 盯 CI 全绿 → 关闭阶段 3
+- 工作树干净；所有分支保留（用户要求）：`fix/ci-stage3-green`、`feature/pty-core`、
+  `feature/term-input`、`feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
+- 待办：阶段 4 pty-win10-early（plan.md §阶段 4 清单）
 
 ## 当前阶段
 
-**阶段 2 完成**（`v0.3.0-stage2`）。**阶段 3 pty-conpty 已交付**（main 含代码 + 标签
-`v0.4.0-stage3`）；round 1+2 合入 main `2d79f4c` 推送后 **run #10：10 job 绿 / 2 job 红**
-（仅 interrupt 双挂），round 3 根因修复已就绪（见"CI run #10 与 round 3"），待推送确认
-CI 全绿即关闭阶段 3、进入阶段 4。
+**阶段 3 pty-conpty 完成**：代码合 main + 标签 `v0.4.0-stage3`，CI round 1–3 修复后
+**run #11 12/12 全绿**（见“CI run #10 与 round 3”末段）→ **阶段 3 关闭**，
+下一步进入**阶段 4 pty-win10-early**。
 
 ## 模块划分（计划）
 
@@ -32,7 +28,7 @@ CI 全绿即关闭阶段 3、进入阶段 4。
 | vt-parser | VT 序列解析 + 终端状态（网格/颜色/光标/滚动缓冲/damage） | ✅ 阶段 1（58 单元 + 13 集成测试） |
 | pty-core | PTY 统一抽象（trait + C ABI），无平台实现 | ✅ 阶段 1（注册/选择/回退 + FFI，9 测试） |
 | pty-unix | openpty/forkpty 后端（Linux/macOS） | ✅ 阶段 1（POSIX 实现；Windows 空壳；unix 测试由 CI 执行） |
-| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（合 main `9d0920a` + 标签 `v0.4.0-stage3`；17/17 全绿；CI round 1–3 修复合入，待全绿） |
+| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3 **完成**（合 main `9d0920a` + 标签 `v0.4.0-stage3`；17/17 全绿；CI run #11 12/12 全绿） |
 | pty-win10-early | 1809 前桥接：控制台 API 直驱 / Cygwin PTY / WinPTY 回退 | 未开始（阶段 4） |
 | term-render-gtk | GTK3+Cairo/OpenGL 渲染 | ✅ 阶段 2（31 单元 + 8 集成测试；Windows(MSYS2) 与 Linux(Ubuntu 20.04) 双平台实测通过） |
 | term-render-qt | Qt 渲染（可选，backlog） | backlog |
@@ -100,7 +96,7 @@ CI 全绿即关闭阶段 3、进入阶段 4。
    Linux 补装 `pkg-config`；docs-check 已覆盖新增 README
 6. 模块 README（`crates/term-render-gtk/README.md`）、`scripts/env.ps1`（本机会话环境）
 
-## 进行中（阶段 3：pty-conpty）— 交付完成，剩 CI 全绿
+## 已完成任务（阶段 3：pty-conpty）— CI run #11 全绿，阶段 3 关闭
 
 ### 已完成
 
@@ -217,6 +213,11 @@ msys2 build 过、windows 集成 5/6、ubuntu/docs/白名单/7×矩阵）、**2 
 round 3 本机验证：`cargo test -p pty-conpty` 6/6（含单元 17/17）×2、flag=0x200 复现条件
 ×2、新增代码 fmt 干净、ci-local **PASSED** → 提交合入推送盯 CI。
 
+**run #11（main `efcbc82`）：12/12 job 全绿**——docs-check、api-whitelist、7×SDK 矩阵、
+build-test（windows 40s / macos 26s / ubuntu 1m1s / msys2 3m35s，windows 与 msys2 的
+`interrupt_stops_long_running_child` 均过）、pipe-mvp；fix 分支同内容 run 亦 success
+→ **阶段 3 关闭**。
+
 ## 本机环境（当前机器，2026-10-06；非 MoMo）
 
 - OS：**Windows 10 企业版 LTSC（build 10.0.17763 / 1809）**→ ConPTY 本机可用；
@@ -277,10 +278,9 @@ round 3 本机验证：`cargo test -p pty-conpty` 6/6（含单元 17/17）×2、
   GTK 渲染的权威验证在 Ubuntu + 本机 MSYS2
 - ~~**ConPTY 阶段 3 阻塞**~~ ✅ 已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 全绿，
   见"进行中（阶段 3）"）
-- ~~**CI run #6/#7/#8 失败（probe 竞态 / msys2 rustc PATH / unix roundtrip 挂死 6h）**~~
-  ✅ round 1 已修复并合入（含全 job `timeout-minutes`）；~~run #9 剩 3 项~~ ✅ round 2
-  已合入（main `2d79f4c`）；~~run #10 剩 interrupt 双挂~~ ✅ round 3 根因修复
-  （清继承 `SetConsoleCtrlHandler(NULL,FALSE)`）已就绪，见"CI run #10 与 round 3"
+- ~~**CI run #6–#10 失败（probe 竞态 / msys2 PATH / unix 挂死 6h / env 竞态 / interrupt
+  继承 ignore）**~~ ✅ round 1–3 全部修复合入 main，**run #11 12/12 job 全绿**（2026-10-06，
+  见“CI run #10 与 round 3”）
 - `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行
   （**本机无 WSL**，用户原约定的"WSL 仅用于 test"在本机不适用）；本机以 linux 目标
   `cargo check --all-targets` 把编译关（ci-local 步骤 4b）
