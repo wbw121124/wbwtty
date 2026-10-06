@@ -2,14 +2,14 @@
 """阶段 0 工具：include 闭包裁剪。
 
 从种子头文件出发，递归解析 #include，把每个 SDK 版本真正需要的头文件
-从 D:\\temp\\win-headers 裁剪到仓库 sdk-headers/<version>/，
+从 <项目盘符>:\\wbwtty-temp\\win-headers 裁剪到仓库 sdk-headers/<version>/，
 保持 um/shared/ucrt/km 相对路径，供 CI 的 cl 编译矩阵离线使用。
 
 种子 = 规格点名的关键头文件（consoleapi*.h、wincon.h、processthreadsapi.h、
 handleapi.h、fileapi.h、winbase.h、winver.h、sdkddkver.h、windows.h）。
 
 用法:
-  python tools/prune-headers.py --src D:/temp/win-headers --dest sdk-headers
+  python tools/prune-headers.py --src F:/wbwtty-temp/win-headers --dest sdk-headers
 """
 from __future__ import annotations
 
