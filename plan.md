@@ -1,11 +1,13 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-06（阶段 3 收尾：**修复 CI run #7/#8 三项失败**——probe 测试竞态 /
-  msys2 rustc PATH / unix roundtrip 挂死 + 全 job `timeout-minutes`；同日 Linux GTK 实测通过）
-- 上次更新：2026-10-06（**Linux GTK 渲染器实测通过** 39/39 + `gtk_smoke` + `demo_window` 截图核验）
+- 最近更新：2026-10-06（阶段 3 收尾 **round 2**：run #9 后再修三项——conpty env/cwd 读竞态 +
+  interrupt 重发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
+- 上次更新：2026-10-06（round 1：修复 CI run #7/#8 三项失败——probe 竞态 / msys2 rustc PATH /
+  unix roundtrip 挂死 + 全 job `timeout-minutes`；同日 Linux GTK 实测通过）
 - 当前阶段：**阶段 2 完成**（`v0.3.0-stage2`）→ **阶段 3 pty-conpty 已合 main 并打标签
-  `v0.4.0-stage3`**（`9d0920a`，已推送）；但 CI run #7/#8 红（3 项失败，诊断与修复见 §6
-  2026-10-06 条目）→ 待 CI 全绿后关闭阶段 3、进入阶段 4
+  `v0.4.0-stage3`**；round 1 合入后 run #9 **9 job 绿 / 3 job 红**（windows 集成测试 2 个、
+  macos `/tmp` 链接、msys2 pkg-config 交叉；诊断与修复见 §6）→ round 2 已就绪待推送，
+  CI 全绿后关闭阶段 3、进入阶段 4
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -110,9 +112,11 @@ F:\wbwtty\
 - [x] 提交 `feat: implement ConPTY backend with dynamic loading`（`c2829ab`）→
       `docs: update stage-3 progress…`（`cd02620`），合 main（`9d0920a`）并打标签
       **v0.4.0-stage3**（均推送 origin）
-- [x] CI run #7/#8 三项失败修复（2026-10-06，分支 `fix/ci-stage3-green`，见 §6）：
+- [x] CI run #7/#8 三项失败修复（round 1，2026-10-06，分支 `fix/ci-stage3-green`，见 §6）：
       probe 测试竞态 → 累积读；msys2 `rustc not found` → step 内 export PATH；
       unix roundtrip 自死锁 → 读写顺序 + 看门狗；全 job `timeout-minutes`
+- [x] run #9 复盘 round 2 修复（同分支续）：conpty `env_and_cwd` 读竞态 + `interrupt` 重发
+      ETX、macos `/tmp`→`/private/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS='1'`
 - [ ] CI 全绿确认（push 后监控）→ 关闭阶段 3、进入阶段 4
 
 ### 阶段 4：pty-win10-early（4-8 周）
@@ -299,3 +303,23 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
     丢 BOM → PS 5.1 按 GBK 解码吞换行 → 行合并语法错）
   - 本机验证：`cargo test -p pty-conpty` **17/17 连跑 3 次全绿**、`scripts/ci-local.ps1` **PASSED**、
     白名单 linter 65 static + 3 dynamic-only、`pipe_mvp` PASS；unix 测试无法本机执行 → 由 CI 判定
+- 2026-10-06（**CI round 1 推送后 run #9 复盘 + round 2 修复**，同分支续）：
+  - round 1 已合入 main（`653ba8c`，`--no-ff`，4 提交 `fix:`×2 + `ci:` + `docs:`）并推送
+  - run #9 结果：**9 job 绿**——docs-check、api-whitelist、7×SDK 矩阵、
+    `build-test (ubuntu-latest)`（unix roundtrip 修复生效，5/5 过）；**3 job 红**（均为首次
+    真正跑到的新代码路径）：
+    1. **windows（pty-conpty 集成 4/6）**：`env_and_cwd_are_applied` 又是读竞态——只读到
+       `stage3-ok` 就返回、`cd` 的 cwd 行未到（断言 `pty-conpty` 失败）→
+       `read_until_all(["stage3-ok","pty-conpty"])` 且**大小写不敏感**；
+       `interrupt_stops_long_running_child` 单发 ETX 在 Server 2022 runner 上不生效
+       （同 job `mode con\r` 交互通过 → 输入管道本身是通的）→ 每 500ms **重发 ETX** 直到
+       退出或 25s 截止（本地重发版 17/17，interrupt ~1.3s）
+    2. **macos（spawn_unix 4/5）**：`/tmp` 是 `/private/tmp` 的符号链接 → `getcwd` 返回
+       `/private/tmp`，字面 needle `OUT:/tmp:bar` 永不命中，输出读完后阻塞到 30s 看门狗；
+       → needle 改行尾 `:bar`（保证整行读全），再分别断言 `OUT:` / `:bar` / `/tmp`
+    3. **msys2（Build workspace）**：rustup 主机是 msvc、`--target` 是 gnu → pkg-config crate
+       判定交叉编译，`glib-sys` build script 报 "pkg-config has not been configured to
+       support cross-compilation"（该 job round 1 才第一次走到 build）→ job 级
+       `env: PKG_CONFIG_ALLOW_CROSS: '1'`
+  - 本机验证：`cargo test -p pty-conpty` **17/17 ×3**（重发版 interrupt 正常 ~1.3s）、
+    ci-local 全绿后推送 round 2
