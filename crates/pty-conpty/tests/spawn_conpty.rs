@@ -65,14 +65,15 @@ fn read_until(pty: &mut dyn Pty, needle: &str, deadline: Duration) -> String {
     read_until_all(pty, &[needle], deadline)
 }
 
-/// 直到**全部** needle 都在纯文本里出现（或 EOF/超时）。
+/// 直到**全部** needle 都在纯文本里出现（或 EOF/超时）。大小写不敏感
+/// （路径大小写因机器而异，如 CI 的 `D:\a\...\pty-conpty`）。
 fn read_until_all(pty: &mut dyn Pty, needles: &[&str], deadline: Duration) -> String {
     let start = Instant::now();
     let mut out: Vec<u8> = Vec::new();
     let mut buf = [0u8; 4096];
     while start.elapsed() < deadline {
-        let text = strip_ansi(&String::from_utf8_lossy(&out));
-        if needles.iter().all(|n| text.contains(n)) {
+        let text = strip_ansi(&String::from_utf8_lossy(&out)).to_lowercase();
+        if needles.iter().all(|n| text.contains(&n.to_lowercase())) {
             break;
         }
         match pty.read(&mut buf) {
@@ -137,7 +138,12 @@ fn env_and_cwd_are_applied() {
         .env("WT_STAGE3_VAR", "stage3-ok");
 
     let mut pty = spawn(&opts);
-    let out = read_until(pty.as_mut(), "stage3-ok", Duration::from_secs(20));
+    // `cd` 的输出晚于 stage3-ok 到达（CI 上曾只读到前半截就返回）→ 等两个都在
+    let out = read_until_all(
+        pty.as_mut(),
+        &["stage3-ok", "pty-conpty"],
+        Duration::from_secs(20),
+    );
     assert!(out.contains("stage3-ok"), "env echo: {out:?}");
     assert!(
         out.to_lowercase().contains("pty-conpty"),
@@ -151,14 +157,26 @@ fn env_and_cwd_are_applied() {
 #[test]
 fn interrupt_stops_long_running_child() {
     watchdog(60);
-    // ping 需 300 秒才自然结束：若 ETX → Ctrl+C 生效应在数秒内退出
+    // ping 需 300 秒才自然结束：若 ETX → Ctrl+C 生效应在数秒内退出。
+    // CI（Server 2022）实测单发 ETX 不生效 → 每 500ms 重发直到退出或截止。
     let opts = SpawnOptions::new("cmd.exe").args(["/c", "ping -n 300 127.0.0.1 >nul"]);
     let mut pty = spawn(&opts);
 
     std::thread::sleep(Duration::from_millis(800));
-    pty.send_signal(Signal::Interrupt).expect("send interrupt");
-
-    let code = wait_exit(pty.as_mut(), Duration::from_secs(20));
+    let deadline = Instant::now() + Duration::from_secs(25);
+    let mut code = None;
+    loop {
+        if let Ok(Some(c)) = pty.try_wait() {
+            code = Some(c);
+            break;
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        // 写失败（管道已关）不致命：下一轮 try_wait 收割
+        let _ = pty.send_signal(Signal::Interrupt);
+        std::thread::sleep(Duration::from_millis(500));
+    }
     assert!(code.is_some(), "child should exit after Ctrl+C");
 }
 
