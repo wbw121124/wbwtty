@@ -1,31 +1,28 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-06（阶段 3 收尾：**CI run #7/#8 三项失败诊断与修复**，分支
-  `fix/ci-stage3-green`；另修 env.ps1 项目盘符候选探测 + BOM，本机 17/17×3、ci-local 全绿）
-- 上次更新：2026-10-06（**Linux GTK 渲染器本机实测通过**：`cargo test -p term-render-gtk` 39/39、
-  `gtk_smoke` OK、`demo_window` 窗口截图核验，见"Linux GTK 实测"）
+- 最近更新：2026-10-06（阶段 3 收尾 **round 2**：run #9 复盘——9 job 绿 / 3 job 红，再修
+  conpty env 读竞态 + interrupt 重发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
+- 上次更新：2026-10-06（round 1：CI run #7/#8 三项失败诊断与修复 + env.ps1 盘符候选探测/BOM；
+  Linux GTK 实测 39/39 通过）
 
 ## 当前 Git 状态
 
-- 当前分支：`fix/ci-stage3-green`（自 main `9d0920a` 拉出；**计划 4 个提交**：`fix:`×2 +
-  `ci:` + `docs:`，`--no-ff` 合回 main 后推送）
-- main = tag **`v0.4.0-stage3`**（`9d0920a` = Merge `feature/pty-conpty`，`c2829ab` feat +
-  `cd02620` docs），均已推送 origin
+- 当前分支：`fix/ci-stage3-green`（round 1 已合 main 并推送；**round 2 改动在工作树待提交**）
+- main = `653ba8c`（`Merge 'fix/ci-stage3-green'`，round 1 四提交 `fix:`×2 + `ci:` + `docs:`，
+  含 tag `v0.4.0-stage3` 之后的 CI 修复），已推送 origin
 - 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`、`v0.4.0-stage3`
-- 工作树未提交（本分支改动）：`.github/workflows/ci.yml`（timeout + msys2 PATH）、
-  `crates/pty-conpty/{src/imp.rs,tests/spawn_conpty.rs}`（probe 累积读 + ANSI 剥离匹配）、
-  `crates/pty-unix/tests/spawn_unix.rs`（roundtrip 死锁 + watchdog）、
-  `scripts/{env.ps1,ci-local.ps1}`（项目盘符候选探测 + BOM）、`tools/prune-headers.py`（文档）、
-  `plan.md`/`AGENT.md`（含 2026-10-06 Linux GTK 实测记录）
+- 工作树未提交（round 2）：`.github/workflows/ci.yml`（`PKG_CONFIG_ALLOW_CROSS`）、
+  `crates/pty-conpty/tests/spawn_conpty.rs`（env/cwd 读竞态 + interrupt 重发 ETX）、
+  `crates/pty-unix/tests/spawn_unix.rs`（macos `/tmp` 符号链接）、`plan.md`/`AGENT.md`
 - 其余分支均未删除（用户要求保留）：`feature/pty-core`、`feature/term-input`、
   `feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
-- 待办：ci-local 全绿 → 四个提交 → 合 main → 推送 → gh 盯 CI 三项转绿 → 关闭阶段 3
+- 待办：ci-local 全绿 → round 2 提交 → 合 main → 推送 → gh 盯 CI 全绿 → 关闭阶段 3
 
 ## 当前阶段
 
-**阶段 2 完成**（`v0.3.0-stage2`）。**阶段 3 pty-conpty 已交付**（main `9d0920a` + 标签
-`v0.4.0-stage3` 已推送；17/17 测试全绿）；**CI run #7/#8 三项失败已诊断并修复**（本分支），
-待 push 后 CI 全绿即关闭阶段 3、进入阶段 4。
+**阶段 2 完成**（`v0.3.0-stage2`）。**阶段 3 pty-conpty 已交付**（main 含代码 + 标签
+`v0.4.0-stage3`）；CI round 1 修复合入后 **run #9：9 job 绿 / 3 job 红**，round 2 修复
+已就绪（见"CI run #9 与 round 2"），待推送确认 CI 全绿即关闭阶段 3、进入阶段 4。
 
 ## 模块划分（计划）
 
@@ -173,6 +170,25 @@ run #7/#8（main `9d0920a` / tag `v0.4.0-stage3` 推送触发）三项失败，g
 **PASSED**（docs/生成物幂等/白名单 65+3/workspace 构建测试/pipe_mvp）、白名单 linter OK；
 unix 测试本机不可执行 → push 后由 CI 判定（修复含读写顺序，无行为猜测风险）。
 
+### CI run #9 与 round 2（2026-10-06）
+
+round 1 合入 main `653ba8c` 推送后 run #9：**9 job 绿**（docs-check、api-whitelist、
+7×SDK 矩阵、`build-test ubuntu` —— unix roundtrip 修复生效 5/5）、**3 job 红**：
+
+1. **windows（pty-conpty 集成 4/6）**：`env_and_cwd_are_applied` 读竞态（只读到
+   `stage3-ok`，`cd` 的 cwd 行未到）→ `read_until_all(["stage3-ok","pty-conpty"])` +
+   大小写不敏感；`interrupt_stops_long_running_child` 单发 ETX 在 Server 2022 不生效
+   （同 job `mode con\r` 通过 → 输入管道本身通）→ 每 500ms 重发 ETX 直到退出/25s 截止
+2. **macos（spawn_unix 4/5）**：`/tmp` → `/private/tmp` 符号链接，字面 needle
+   `OUT:/tmp:bar` 永不命中 → 输出读完后阻塞至 30s 看门狗；改 needle `:bar`（行尾）+
+   分别断言 `OUT:`/`:bar`/`/tmp`
+3. **msys2（Build workspace，该 job 首次走到 build）**：msvc 主机 + gnu target →
+   pkg-config crate 判定交叉编译，`glib-sys` build script 失败 → job 级
+   `env: PKG_CONFIG_ALLOW_CROSS: '1'`
+
+round 2 本机验证：`cargo test -p pty-conpty` **17/17 ×3**（重发版 interrupt ~1.3s）、
+ci-local 全绿 → 提交合入推送，再盯下一轮。
+
 ## 本机环境（当前机器，2026-10-06；非 MoMo）
 
 - OS：**Windows 10 企业版 LTSC（build 10.0.17763 / 1809）**→ ConPTY 本机可用；
@@ -234,8 +250,9 @@ unix 测试本机不可执行 → push 后由 CI 判定（修复含读写顺序�
 - ~~**ConPTY 阶段 3 阻塞**~~ ✅ 已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 全绿，
   见"进行中（阶段 3）"）
 - ~~**CI run #6/#7/#8 失败（probe 竞态 / msys2 rustc PATH / unix roundtrip 挂死 6h）**~~
-  ✅ 已诊断并修复（含全 job `timeout-minutes`），**待 push 后 CI 全绿确认**，
-  见"进行中（阶段 3）→ CI run #7/#8 失败诊断与修复"
+  ✅ round 1 已修复并合入（含全 job `timeout-minutes`）；**run #9 剩 3 项**（conpty env 竞态 +
+  interrupt 单发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）✅ round 2
+  已修复待推送确认，见"CI run #9 与 round 2"
 - `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行
   （**本机无 WSL**，用户原约定的"WSL 仅用于 test"在本机不适用）；本机以 linux 目标
   `cargo check --all-targets` 把编译关（ci-local 步骤 4b）

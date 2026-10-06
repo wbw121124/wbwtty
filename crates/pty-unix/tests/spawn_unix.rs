@@ -79,10 +79,14 @@ fn spawn_cwd_env_and_write_roundtrip() {
             .env("FOO", "bar"),
     )
     .expect("spawn");
-    // 子进程先打印 OUT: 再阻塞等 stdin：必须先读到 OUT: 才能写。
+    // 子进程先打印 OUT: 再阻塞等 stdin：必须先读到输出才能写。
     // 旧顺序（先等 |got: 再写）会让阻塞 read 永远等不到 needle → CI 曾挂死 6h。
-    let out = read_until(pty.as_mut(), "OUT:/tmp:bar");
-    assert!(out.contains("OUT:/tmp:bar"), "got {out:?}");
+    // macOS 上 /tmp 是 /private/tmp 的符号链接，getcwd 返回 /private/tmp →
+    // needle 不能要求字面 "/tmp"；FOO 值在行尾，用 ":bar" 保证整行读全。
+    let out = read_until(pty.as_mut(), ":bar");
+    assert!(out.contains("OUT:"), "got {out:?}");
+    assert!(out.contains(":bar"), "FOO env not applied: {out:?}");
+    assert!(out.contains("/tmp"), "cwd not under /tmp: {out:?}");
 
     pty.write(b"hi\n").expect("write");
     let out2 = read_until(pty.as_mut(), "got:hi");
