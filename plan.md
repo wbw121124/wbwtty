@@ -1,13 +1,14 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-06（阶段 3 收尾 **round 2**：run #9 后再修三项——conpty env/cwd 读竞态 +
-  interrupt 重发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
-- 上次更新：2026-10-06（round 1：修复 CI run #7/#8 三项失败——probe 竞态 / msys2 rustc PATH /
-  unix roundtrip 挂死 + 全 job `timeout-minutes`；同日 Linux GTK 实测通过）
+- 最近更新：2026-10-06（阶段 3 收尾 **round 3**：run #10 后定案 interrupt 根因——runner
+  启动链 `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清继承
+  ignore 即修；本地 0x200 标志精确复现）
+- 上次更新：2026-10-06（round 2：run #9 复盘——conpty env/cwd 读竞态 + interrupt 重发 ETX、
+  macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
 - 当前阶段：**阶段 2 完成**（`v0.3.0-stage2`）→ **阶段 3 pty-conpty 已合 main 并打标签
-  `v0.4.0-stage3`**；round 1 合入后 run #9 **9 job 绿 / 3 job 红**（windows 集成测试 2 个、
-  macos `/tmp` 链接、msys2 pkg-config 交叉；诊断与修复见 §6）→ round 2 已就绪待推送，
-  CI 全绿后关闭阶段 3、进入阶段 4
+  `v0.4.0-stage3`**；round 1+2 合入 main `2d79f4c` 推送后 run #10 **10 job 绿 / 2 job 红**
+  （仅 `interrupt_stops_long_running_child` 在 windows-latest 与 msys2 双挂 → round 3 根因
+  修复待合入推送）→ CI 全绿后关闭阶段 3、进入阶段 4
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -117,6 +118,9 @@ F:\wbwtty\
       unix roundtrip 自死锁 → 读写顺序 + 看门狗；全 job `timeout-minutes`
 - [x] run #9 复盘 round 2 修复（同分支续）：conpty `env_and_cwd` 读竞态 + `interrupt` 重发
       ETX、macos `/tmp`→`/private/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS='1'`
+- [x] run #10 复盘 round 3 修复（同分支续）：interrupt 根因 = `CREATE_NEW_PROCESS_GROUP`
+      祖先隐式 `SetConsoleCtrlHandler(NULL,TRUE)` 且**可继承** → 测试 spawn 前清继承 ignore
+      （本地 0x200 标志精确复现；CTRL_BREAK 兜底弯路已弃，见 §6）
 - [ ] CI 全绿确认（push 后监控）→ 关闭阶段 3、进入阶段 4
 
 ### 阶段 4：pty-win10-early（4-8 周）
@@ -323,3 +327,25 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
        `env: PKG_CONFIG_ALLOW_CROSS: '1'`
   - 本机验证：`cargo test -p pty-conpty` **17/17 ×3**（重发版 interrupt 正常 ~1.3s）、
     ci-local 全绿后推送 round 2
+- 2026-10-06（**CI run #10 复盘 + round 3：interrupt 根因定案**，同分支续）：
+  - round 2 已合入 main（`2d79f4c`，`--no-ff`）并推送 → run #10：**10 job 绿**
+    （macos `/private/tmp` 修复生效、msys2 build 过、windows 集成 5/6、ubuntu/docs/白名单/
+    7×矩阵）；**2 job 红**：`interrupt_stops_long_running_child` 在 windows-latest 与 msys2
+    均 25.83s 挂在 `child should exit after Ctrl+C`（每 500ms 重发 ETX 25s 仍无效）
+  - 诊断：同 job `mode con\r` 交互通过 → 输入管道通；本地 `CREATE_NO_WINDOW`（无控制台）
+    模拟通过 → 排除“测试进程无控制台”；**本地 python `creationflags=0x200`
+    （CREATE_NEW_PROCESS_GROUP）启动 cargo test → 与 CI 一字不差复现**（26s 同断言失败，
+    flag=0 则 1.3s 过）
+  - 根因：带该标志创建的进程隐式 `SetConsoleCtrlHandler(NULL,TRUE)`（忽略 Ctrl+C），且该
+    属性**可继承** → 祖先链（CI runner 启动链）→ 测试进程 → cmd → ping 全链继承 →
+    conhost 把 ETX 转成 Ctrl+C 事件投递成功，但各进程按继承属性跳过处理器 → 无人退出
+  - 修法：`interrupt_stops_long_running_child` 在 spawn 前 `SetConsoleCtrlHandler(NULL,FALSE)`
+    清掉继承的 ignore（子进程从干净状态创建）→ 复现条件下 1.30s 过、正常环境 6/6 过
+  - 弯路（已弃，仅记结论）：CTRL_BREAK 兜底（AttachConsole + GenerateConsoleCtrlEvent）——
+    group id 0 广播对伪控制台不投递；`NULL,TRUE` 挡不住 Ctrl+Break 会自杀（0xC000013A）；
+    定向投递成功也杀不掉 cmd → 复杂且无效，全部移除
+  - 产品级提示（记入已知限制）：pty-conpty spawn **不改**父进程的 Ctrl+C 处理器（库副作用
+    不可接受）；处于此类被保护启动链的应用需自行 `SetConsoleCtrlHandler(NULL,FALSE)` 才能让
+    ConPTY 子进程收到 Ctrl+C
+  - 本机验证：`cargo test -p pty-conpty` 6/6（含单元 17/17）×2、flag=0x200 复现条件 ×2、
+    新增代码 fmt 干净（仓库其余 fmt 漂移为既有、CI 不检查）、ci-local **PASSED**
