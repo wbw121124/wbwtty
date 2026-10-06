@@ -497,8 +497,13 @@ mod tests {
     use pty_core::SpawnOptions;
 
     /// 诊断：子进程输出是否真的落在 ConPTY 输出管道上。
+    ///
+    /// 管道里通常**先**出现 ConPTY 握手序列（`ESC[?9001h`/`ESC[?1004h`，16 字节），
+    /// `cmd` 的回显随后才到；单次 read 只拿到握手就断言 needle 会误报（CI windows 复现），
+    /// 所以必须在截止时间内**累积**读到 needle。
     #[test]
     fn probe_output_pipe_receives_child_output() {
+        const NEEDLE: &str = "probe-marker";
         let mut pty = match spawn_conpty_typed(
             &SpawnOptions::new("cmd.exe").args(["/c", "echo probe-marker"]),
         ) {
@@ -507,38 +512,45 @@ mod tests {
         };
         let out_handle = pty.output_handle();
 
-        let mut seen = 0usize;
-        for _ in 0..300 {
-            unsafe {
+        let start = std::time::Instant::now();
+        let mut acc: Vec<u8> = Vec::new();
+        let mut buf = [0u8; 1024];
+        while start.elapsed() < Duration::from_secs(3)
+            && !String::from_utf8_lossy(&acc).contains(NEEDLE)
+        {
+            let avail = unsafe {
                 let mut avail: sys::DWORD = 0;
-                if sys::PeekNamedPipe(
+                let r = sys::PeekNamedPipe(
                     out_handle,
                     std::ptr::null_mut(),
                     0,
                     std::ptr::null_mut(),
                     &mut avail,
                     std::ptr::null_mut(),
-                ) == 0
-                {
-                    break;
+                );
+                if r == 0 {
+                    break; // 管道已关闭
                 }
-                seen += avail as usize;
-                if avail > 0 {
-                    break;
-                }
+                avail as usize
+            };
+            if avail == 0 {
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
             }
-            std::thread::sleep(Duration::from_millis(10));
+            // 数据已在管道里，read 不会阻塞；只取已确认可用的字节
+            let take = avail.min(buf.len());
+            let n = pty.read(&mut buf[..take]).expect("read");
+            if n == 0 {
+                break; // EOF
+            }
+            acc.extend_from_slice(&buf[..n]);
         }
-        eprintln!("probe: pipe bytes available = {seen}");
-        assert_ne!(seen, 0, "管道 3 秒内无数据：子进程没挂在 ConPTY 上");
-
-        let mut buf = [0u8; 1024];
-        let n = pty.read(&mut buf).expect("read");
-        let text = String::from_utf8_lossy(&buf[..n]).into_owned();
-        eprintln!("probe: read {n} bytes: {text:?}");
+        let text = String::from_utf8_lossy(&acc).into_owned();
+        eprintln!("probe: read {} bytes: {text:?}", acc.len());
         assert!(
-            text.contains("probe-marker"),
-            "输出未走 ConPTY 管道（bytes={n}, avail={seen}）"
+            text.contains(NEEDLE),
+            "输出未走 ConPTY 管道（bytes={}, 3s 内未见 {NEEDLE:?}）",
+            acc.len()
         );
     }
 }

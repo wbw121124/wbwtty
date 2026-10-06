@@ -1,8 +1,11 @@
 # plan.md — 跨平台终端框架实施计划
 
-- 最近更新：2026-10-05（阶段 3 测试全绿，文档/提交推进中；**已恢复到新机器 wbw/MoMo**）
-- 当前阶段：**阶段 2 完成**（标签 `v0.3.0-stage2`）→ **阶段 3 pty-conpty**：阻塞已修复
-  （`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 测试全绿，见 §6），待 README/docs/提交/标签/CI
+- 最近更新：2026-10-06（阶段 3 收尾：**修复 CI run #7/#8 三项失败**——probe 测试竞态 /
+  msys2 rustc PATH / unix roundtrip 挂死 + 全 job `timeout-minutes`；同日 Linux GTK 实测通过）
+- 上次更新：2026-10-06（**Linux GTK 渲染器实测通过** 39/39 + `gtk_smoke` + `demo_window` 截图核验）
+- 当前阶段：**阶段 2 完成**（`v0.3.0-stage2`）→ **阶段 3 pty-conpty 已合 main 并打标签
+  `v0.4.0-stage3`**（`9d0920a`，已推送）；但 CI run #7/#8 红（3 项失败，诊断与修复见 §6
+  2026-10-06 条目）→ 待 CI 全绿后关闭阶段 3、进入阶段 4
 - 版本规划：v0.1.0-stage0 → v0.2.0-stage1 → v0.3.0-stage2 → v0.4.0-stage3 → v0.5.0-stage4 → 阶段 5 持续
 
 ## 1. 目标与范围
@@ -15,18 +18,18 @@ GPU 加速渲染，模块化可独立复用，全程 Git + Conventional Commits 
 | 决策点 | 结论 |
 |---|---|
 | SDK 头文件获取 | ralish/win-headers 快照为 7 版本权威来源 + 官方安装器（10240、17763）静默安装交叉校验 |
-| 下载/解压位置 | **按仓库所在盘符自动检测**（`scripts/env.ps1`/`ci-local.ps1`）→ `<盘符>:\wbwtty-temp`（当前仓库在 G:，即 `G:\wbwtty-temp`）；网络代理 127.0.0.1:7890 可用 |
+| 下载/解压位置 | **按仓库所在盘符自动检测**（`scripts/env.ps1`/`ci-local.ps1`）→ `<盘符>:\wbwtty-temp`（当前仓库在 F:，即 `F:\wbwtty-temp`）；网络代理 127.0.0.1:7890 可用 |
 | per-SDK 编译检查 | 真实编译矩阵在 GitHub Actions windows-latest（MSVC cl）；本机用 Python 白名单 linter |
 | CI 平台 | GitHub Actions（.github/workflows/ci.yml）+ 创建远端仓库并推送 |
 | GTK 渲染 | 本机已有 MSYS2（`E:\吴邦玮\项目\mymsys2`，ucrt64），2026-10-05 补装 gtk3+pkgconf；CI Ubuntu 为权威验证 |
 | 执行范围 | 阶段 0→5 严格顺序推进，每阶段提交+标签后进入下一阶段 |
 | Git 身份 | wbw121124 <wbw121124@163.com>（仅仓库 local 配置） |
-| 本机持久化 | **换机 wbw/MoMo（Win11 22621，2026-10-05）**：仓库 `G:\wbwtty`；Rust 用默认 `C:\Users\wbw\.rustup/.cargo`；**路径一律按工作目录盘符检测**（临时/下载 → `<盘符>:\wbwtty-temp`，MSYS2 候选探测 `E:\吴邦玮\项目\mymsys2` → `D:\msys`）；git 用 safe.directory 免 dubious ownership |
+| 本机持久化 | **项目盘符优先的候选探测**（`scripts/env.ps1`，`ci-local.ps1` 点号引入同一份逻辑）：临时/下载 → `<盘符>:\wbwtty-temp`；`RUSTUP_HOME` `<盘符>:\rustup`→`D:\rustup`、`CARGO_HOME` `<盘符>:\cargo`→`D:\cargo`、MSYS2 `<盘符>:\msys`→`E:\吴邦玮\项目\mymsys2`→`D:\msys`（候选不存在自动跳过）；**`.ps1` 必须 UTF-8 带 BOM**（PS 5.1 无 BOM 按 GBK 解码会吞换行）；git 按需 safe.directory；换机历史见 §6（2026-10-05 wbw/MoMo → 2026-10-06 Win10 LTSC 17763 机器、仓库 `F:\wbwtty`） |
 
 ## 2. 仓库结构
 
 ```
-G:\wbwtty\
+F:\wbwtty\
 ├── .gitignore  AGENT.md  plan.md  README.md  Cargo.toml (workspace)
 ├── .github/workflows/ci.yml
 ├── tools/                      # 阶段0脚本
@@ -86,9 +89,11 @@ G:\wbwtty\
 - [x] term-input：键/鼠/滚轮/paste → VT 序列；修饰键、application keypad、SGR mouse、bracketed paste
 - [x] term-render-gtk：GTK3+Cairo，damage 驱动重绘、字形缓存、真彩色、光标、滚动缓冲、resize 联动
       （Rust(gnu) ↔ MSYS2 ucrt64 链接**实测通过**；pangocairo 自声明 FFI；CI 仅 Linux 全量构建）
+- [x] Linux 本机（Ubuntu 20.04 / X11）**实测通过**（2026-10-06）：39/39 测试 + `gtk_smoke` +
+      `demo_window` 窗口截图核验，详见 §6 与 AGENT.md"Linux GTK 实测"
 - [x] 标签 **v0.3.0-stage2**（term-render-qt 列入 backlog）
 
-### 阶段 3：pty-conpty（2-3 周）— 收尾中（测试全绿，待提交/标签/CI）
+### 阶段 3：pty-conpty（2-3 周）— 代码/文档/标签已交付，CI 修复已提交（待 CI 全绿后关闭）
 - [x] 白名单扩展：`proc-thread-attribute` 三函数（Initialize/Update/Delete）入 CURATED_KERNEL
       → 65 static + 3 dynamic-only，7 版全绿（提交 `e111b4f`）
 - [x] `crates/pty-conpty` 骨架 + 动态加载：`src/sys.rs`（repr(C) 类型/白名单 extern/
@@ -102,7 +107,13 @@ G:\wbwtty\
 - [x] 加载失败返回 `SpawnError::BackendUnavailable`（上层注册表回退，pty-win10-early 留占位）
 - [x] 本机集成测试 6/6 + 单元 11/11 = **17/17 全绿**（0.88s，看门狗未触发）
 - [x] `crates/pty-conpty/README.md`（docs-check 必需）
-- [ ] 提交 `feat: implement ConPTY backend with dynamic loading`，标签 **v0.4.0-stage3**
+- [x] 提交 `feat: implement ConPTY backend with dynamic loading`（`c2829ab`）→
+      `docs: update stage-3 progress…`（`cd02620`），合 main（`9d0920a`）并打标签
+      **v0.4.0-stage3**（均推送 origin）
+- [x] CI run #7/#8 三项失败修复（2026-10-06，分支 `fix/ci-stage3-green`，见 §6）：
+      probe 测试竞态 → 累积读；msys2 `rustc not found` → step 内 export PATH；
+      unix roundtrip 自死锁 → 读写顺序 + 看门狗；全 job `timeout-minutes`
+- [ ] CI 全绿确认（push 后监控）→ 关闭阶段 3、进入阶段 4
 
 ### 阶段 4：pty-win10-early（4-8 周）
 - [ ] a) 控制台 API 直驱：隐藏控制台 host + CREATE_SUSPENDED 注入 conhook.dll +
@@ -141,6 +152,7 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
 3. 本机无 MSVC/SDK → 编译矩阵权威在 CI，本机 linter 等价检查 API 引用。
 4. Rust(gnu) ↔ MSYS2 ucrt64 链接 → **已实测通过**（阶段 2：`gtk_smoke`/`demo_window` 本机可运行；
    CI Ubuntu 为权威验证，Windows/macOS CI 无 GTK 开发包时排除该 crate）。
+   **Linux 侧亦已本机实测**（2026-10-06，Ubuntu 20.04：39/39 测试 + 冒烟 + 窗口截图核验）。
 5. 老 SDK 官方安装器 fwlink 可能失效 → 记录于 header-verification.md，以快照为准并说明取舍。
 
 ## 6. 进度日志
@@ -249,3 +261,41 @@ CI 门禁：push 与 pull_request 触发；构建全模块、跑单元测试、7
   - CI run #6（head `5675262`）结论：docs-check / api-whitelist / windows build-test /
     7×SDK 矩阵全绿；`build-test (msys2-ucrt64-latest)` 在 "Environment sanity" 步骤失败；
     ubuntu/macos "Test workspace" 挂 2h13m 后被取消（run 整体 cancelled，疑手动）→ 待 gh 拉日志定位
+- 2026-10-06（**Linux GTK 实测**，仓库在 U 盘 `/media/noi/wbw_121124 的 USB 闪存盘/wbwtty`，
+  主机 K404-B111 / Ubuntu 20.04 / X11 `DISPLAY=:0`）：
+  - 环境补装：rustup 初始**无任何 toolchain** → `rustup default stable`（rustc/cargo 1.99.0）；
+    GTK3 只有运行库缺 dev → `sudo apt-get install -y libgtk-3-dev`（gtk+-3.0 **3.24.20**，
+    连带 epoxy/wayland/xkbcommon dev）；`pkg-config --modversion gtk+-3.0 pangocairo`
+    → `3.24.20` / `1.44.7`
+  - `cargo test -p term-render-gtk` → **39/39 全绿**（31 单元 batch/color/cache/metrics/
+    viewport/renderer + 8 集成 `tests/pipeline.rs`，0 失败）
+  - `cargo run -p term-render-gtk --example gtk_smoke` → `gtk::init OK - GTK3 linked and loadable`（退出码 0）
+  - `cargo run -p term-render-gtk --example demo_window`（后台）→ `xwininfo` 见窗口
+    `"term-render-gtk demo"` 800x600；`gnome-screenshot` 截图核验：帧计数、真彩色渐变、
+    下划线/删除线/斜体、移动方块（局部 damage）、底行宽字符 `宽字符 中文abc é 完成` 均正确
+  - 副作用清理：`Cargo.lock` 跨机带来的 `version = 4→3` 头部差异已 `git checkout` 恢复，
+    **工作树干净**
+  - 结论：term-render-gtk 在 **Windows(MSYS2 ucrt64) / Ubuntu 20.04 双平台实测通过**
+- 2026-10-06（**阶段 3 收尾：CI run #7/#8 三项失败诊断与修复**，分支 `fix/ci-stage3-green`；
+  本机为另一台机器：Win10 企业版 LTSC 17763、仓库 `F:\wbwtty`、**无 WSL** → unix 测试只靠 CI）：
+  - 现状：main `9d0920a`（tag `v0.4.0-stage3`）已推送；run #7/#8 红，gh 拉 job 日志定案三项根因
+  - 根因 1（windows-latest）：`imp.rs` probe 测试只读 16 字节 ConPTY 握手
+    （`ESC[?9001h ESC[?1004h`）就断言 `probe-marker` → **竞态** → 改为循环 PeekNamedPipe+
+    累积读直到含 marker 或 3s 截止
+  - 根因 2（msys2-ucrt64）：MSYS2 shell 不继承 GITHUB_PATH 注入的 rustup 目录 →
+    `rustc: command not found` → 该 job 三个 run step 内 `export PATH="$(cygpath -u
+    "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"`
+  - 根因 3（ubuntu/macos 挂满 6h 被取消）：`pty-unix` 集成测试 `spawn_cwd_env_and_write_roundtrip`
+    **自死锁**——先 `read_until("|got:")` 才写 `hi\n`，阻塞在 `libc::read` 使 10s deadline 断言
+    永不触发（其余 4 个 unix 测试 1 秒内通过，日志证据）→ 改为先读 banner（`OUT:/tmp:bar`）
+    再写、再读 `got:hi`，并给 4 个 spawn 测试加 `watchdog(30)`（conpty 同款惯例）
+  - 附带：全 job 补 `timeout-minutes`（docs 10 / whitelist 10 / build-test 30 / msys2 30 /
+    pipe-mvp 20 / matrix 15），杜绝再挂 6h；本地复跑又抓到两个测试健壮性问题并一并修：
+    probe 测试 `E0502` 借用错（先 `let take` 再切片）、`resize_applies_and_interactive_shell_echoes`
+    被 resize 重绘 `ESC[137X` 提前命中 → `strip_ansi` + `read_until_all(["137","53"])` 按纯文本匹配
+  - 环境：`scripts/env.ps1` 改为**项目盘符优先的候选探测**（`RUSTUP_HOME` `<盘符>:\rustup`→
+    `D:\rustup`、`CARGO_HOME` `<盘符>:\cargo`→`D:\cargo`、MSYS2 `<盘符>:\msys`→旧机路径），
+    `ci-local.ps1` 改为点号引入 env.ps1 去重；**修 `.ps1` 必须 UTF-8 带 BOM**（env.ps1 编辑时
+    丢 BOM → PS 5.1 按 GBK 解码吞换行 → 行合并语法错）
+  - 本机验证：`cargo test -p pty-conpty` **17/17 连跑 3 次全绿**、`scripts/ci-local.ps1` **PASSED**、
+    白名单 linter 65 static + 3 dynamic-only、`pipe_mvp` PASS；unix 测试无法本机执行 → 由 CI 判定

@@ -1,24 +1,31 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-05（阶段 3 阻塞已修复、17/17 测试全绿；**换机恢复 wbw/MoMo**，文档/提交推进中）
+- 最近更新：2026-10-06（阶段 3 收尾：**CI run #7/#8 三项失败诊断与修复**，分支
+  `fix/ci-stage3-green`；另修 env.ps1 项目盘符候选探测 + BOM，本机 17/17×3、ci-local 全绿）
+- 上次更新：2026-10-06（**Linux GTK 渲染器本机实测通过**：`cargo test -p term-render-gtk` 39/39、
+  `gtk_smoke` OK、`demo_window` 窗口截图核验，见"Linux GTK 实测"）
 
 ## 当前 Git 状态
 
-- 当前分支：`feature/pty-conpty`（远端 head `5675262`，本地领先 1 提交 `e111b4f`；main 停在 `a24dbeb` 阶段 2 合并）
-- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`
-- 本地未推送提交：`e111b4f chore: whitelist proc-thread-attribute APIs needed by ConPTY`
-- 工作树未提交：`Cargo.toml`/`Cargo.lock`（pty-conpty 成员）+ 未跟踪 `crates/pty-conpty/`
-  （src/{lib,sys,cmdline,imp}.rs、tests/spawn_conpty.rs、**README.md 已写**）
-  + 本次修复（imp.rs STARTF 修法、sys.rs 常量、scripts 盘符检测、plan/AGENT 文档）
+- 当前分支：`fix/ci-stage3-green`（自 main `9d0920a` 拉出；**计划 4 个提交**：`fix:`×2 +
+  `ci:` + `docs:`，`--no-ff` 合回 main 后推送）
+- main = tag **`v0.4.0-stage3`**（`9d0920a` = Merge `feature/pty-conpty`，`c2829ab` feat +
+  `cd02620` docs），均已推送 origin
+- 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`、`v0.4.0-stage3`
+- 工作树未提交（本分支改动）：`.github/workflows/ci.yml`（timeout + msys2 PATH）、
+  `crates/pty-conpty/{src/imp.rs,tests/spawn_conpty.rs}`（probe 累积读 + ANSI 剥离匹配）、
+  `crates/pty-unix/tests/spawn_unix.rs`（roundtrip 死锁 + watchdog）、
+  `scripts/{env.ps1,ci-local.ps1}`（项目盘符候选探测 + BOM）、`tools/prune-headers.py`（文档）、
+  `plan.md`/`AGENT.md`（含 2026-10-06 Linux GTK 实测记录）
 - 其余分支均未删除（用户要求保留）：`feature/pty-core`、`feature/term-input`、
-  `feature/term-render-gtk`、`feature/vt-parser`
-- 待办：ci-local 全绿 → 分批提交 → 合 main 打 `v0.4.0-stage3` → 推送 → 修 CI run #6 遗留
+  `feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
+- 待办：ci-local 全绿 → 四个提交 → 合 main → 推送 → gh 盯 CI 三项转绿 → 关闭阶段 3
 
 ## 当前阶段
 
-**阶段 2 完成**（标签 `v0.3.0-stage2`）。**阶段 3 pty-conpty 收尾中**：
-std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo test -p pty-conpty`
-**17/17 全绿**（11 单元 + 6 集成，0.88s）；剩 README 已写、docs 更新、提交/标签/CI。
+**阶段 2 完成**（`v0.3.0-stage2`）。**阶段 3 pty-conpty 已交付**（main `9d0920a` + 标签
+`v0.4.0-stage3` 已推送；17/17 测试全绿）；**CI run #7/#8 三项失败已诊断并修复**（本分支），
+待 push 后 CI 全绿即关闭阶段 3、进入阶段 4。
 
 ## 模块划分（计划）
 
@@ -27,9 +34,9 @@ std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo te
 | vt-parser | VT 序列解析 + 终端状态（网格/颜色/光标/滚动缓冲/damage） | ✅ 阶段 1（58 单元 + 13 集成测试） |
 | pty-core | PTY 统一抽象（trait + C ABI），无平台实现 | ✅ 阶段 1（注册/选择/回退 + FFI，9 测试） |
 | pty-unix | openpty/forkpty 后端（Linux/macOS） | ✅ 阶段 1（POSIX 实现；Windows 空壳；unix 测试由 CI 执行） |
-| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（修法落地，17/17 测试全绿；待提交/标签/CI） |
+| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（合 main `9d0920a` + 标签 `v0.4.0-stage3`；17/17 全绿；CI 修复已提交待全绿） |
 | pty-win10-early | 1809 前桥接：控制台 API 直驱 / Cygwin PTY / WinPTY 回退 | 未开始（阶段 4） |
-| term-render-gtk | GTK3+Cairo/OpenGL 渲染 | ✅ 阶段 2（31 单元 + 8 集成测试；本机链接/窗口跑通） |
+| term-render-gtk | GTK3+Cairo/OpenGL 渲染 | ✅ 阶段 2（31 单元 + 8 集成测试；Windows(MSYS2) 与 Linux(Ubuntu 20.04) 双平台实测通过） |
 | term-render-qt | Qt 渲染（可选，backlog） | backlog |
 | term-input | 键鼠事件 → VT 序列编码（纯函数） | ✅ 阶段 2（11 单元 + 6 集成测试） |
 | term-app | 组装示例主程序 | 未开始（阶段 2 起） |
@@ -95,7 +102,7 @@ std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo te
    Linux 补装 `pkg-config`；docs-check 已覆盖新增 README
 6. 模块 README（`crates/term-render-gtk/README.md`）、`scripts/env.ps1`（本机会话环境）
 
-## 进行中（阶段 3：pty-conpty）— 2026-10-05 换机恢复后已修复
+## 进行中（阶段 3：pty-conpty）— 交付完成，剩 CI 全绿
 
 ### 已完成
 
@@ -139,33 +146,81 @@ std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo te
 - CI run #6（head `5675262`）：docs-check / api-whitelist / windows build-test /
   7×SDK 矩阵**全绿**；`build-test (msys2-ucrt64-latest)` 在 "Environment sanity
   (GTK3 + rustc)" 步骤**失败**；ubuntu/macos "Test workspace" 挂 2h13m 后被取消
-  （run 整体 cancelled）→ 待用 gh 拉 job 日志定位（gh 已认证）
+  （run 整体 cancelled）→ **已在 run #7/#8 日志中定案并修复（见下节）**
 
-## 本机环境（换机 wbw/MoMo，Win11 22621，2026-10-05）
+### CI run #7/#8 失败诊断与修复（2026-10-06，分支 `fix/ci-stage3-green`）
 
-- 仓库：`G:\wbwtty`（旧机为 F: U盘；git 需 `safe.directory` 已配置，否则报 dubious ownership）
-- **路径一律按工作目录（仓库）所在盘符检测**：临时/下载 → `<盘符>:\wbwtty-temp`
-  （当前 `G:\wbwtty-temp`，诊断脚本与 zctest 都在此）；MSYS2 候选探测
-  `E:\吴邦玮\项目\mymsys2` → `D:\msys`
-- Rust：默认 `C:\Users\wbw\.rustup/.cargo`（rustc 1.97.1；targets：windows-gnu 默认、
-  msvc、linux-gnu；darwin 未装，ci-local 不需要）；仅当旧机 `D:\rustup`/`D:\cargo`
-  存在时脚本才会固定到 D:（兼容旧机与 CI runner）
-- 每次开新终端：`. .\scripts\env.ps1`（fresh 进程跑 ci-local 则自带等价内联）
-- 代理：127.0.0.1:7890（crates.io/GitHub 直连可用；tuna 镜像对代理 403，pacman 用直连）
-- gh CLI：`C:\Program Files\GitHub CLI`，已认证 wbw121124（scopes：repo+workflow+gist+read:org）
-- WSL：Ubuntu-22.04（WSL2，默认停止）——**仅少量用于 test**（unix 路径测试等，用户约定）
-- 范围约定：只在 `G:\wbwtty` 内改文件；下载/解压 `G:\wbwtty-temp`；不扫全盘
+run #7/#8（main `9d0920a` / tag `v0.4.0-stage3` 推送触发）三项失败，gh 拉 job 日志定案：
 
-## MSYS2 环境（2026-10-05 换机后补装 gtk3）
+1. **windows-latest probe 竞态**：`imp.rs::probe_output_pipe_receives_child_output`
+   只读 16 字节 ConPTY 握手（`ESC[?9001h ESC[?1004h`）就断言 `probe-marker` →
+   改为循环 PeekNamedPipe + 累积读直到含 marker 或 3s 截止（另有 `E0502` 借用错一并修，
+   先 `let take` 再切片）
+2. **msys2-ucrt64 `rustc: command not found`**：MSYS2 shell 不继承 GITHUB_PATH 注入的
+   rustup 目录 → 该 job 三个 run step 内 `export PATH="$(cygpath -u
+   "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"`
+3. **ubuntu/macos 挂满 6h 被取消**：`pty-unix::spawn_cwd_env_and_write_roundtrip`
+   **自死锁**——先 `read_until("|got:")` 才写 `hi\n`，阻塞在 `libc::read` 使 10s deadline
+   断言永不触发（同 job 其余 4 个 unix 测试 1s 内通过）→ 改为先读 banner
+   （`OUT:/tmp:bar`）→ 写 `hi\n` → 读 `got:hi`，4 个 spawn 测试加 `watchdog(30)`
+4. **全 job 补 `timeout-minutes`**（docs 10 / whitelist 10 / build-test 30 / msys2 30 /
+   pipe-mvp 20 / matrix 15）杜绝再挂 6h
+5. 本地复跑又抓到 `resize_applies_and_interactive_shell_echoes` 竞态（resize 重绘
+   `ESC[137X` 先于 `mode con` 纯文本命中 `read_until("137")`）→ `strip_ansi` +
+   `read_until_all(["137","53"])` 按去转义后的纯文本匹配
 
-- 本机 MSYS2 已预装于 `E:\吴邦玮\项目\mymsys2`（标准布局；`usr\bin\pacman.exe`，
-  ucrt64 gcc 16.2.0 已有）
-- 2026-10-05 补装：`pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkgconf`
-  → gtk3 **3.24.52**、pangocairo 1.58.2（tuna 镜像对代理 403 → 去掉代理直连成功；
-  post-transaction hook 有一次非 ASCII 路径报错，包本体与 pkg-config 探测正常）
-- 用法：构建时 PATH 前置 `E:\吴邦玮\项目\mymsys2\ucrt64\bin`
-  （`scripts/env.ps1` 已按候选路径自动前置）；需要时 `scripts/env.ps1` 取消代理注释
-- 旧机 MSYS2 装在 `D:\msys`（本机不存在，候选探测自然跳过）
+本机验证：`cargo test -p pty-conpty` **17/17 连跑 3 次全绿**、`scripts/ci-local.ps1`
+**PASSED**（docs/生成物幂等/白名单 65+3/workspace 构建测试/pipe_mvp）、白名单 linter OK；
+unix 测试本机不可执行 → push 后由 CI 判定（修复含读写顺序，无行为猜测风险）。
+
+## 本机环境（当前机器，2026-10-06；非 MoMo）
+
+- OS：**Windows 10 企业版 LTSC（build 10.0.17763 / 1809）**→ ConPTY 本机可用；
+  **本机无 WSL**（`wsl.exe` 不存在）→ unix 集成测试只由 CI 执行
+- 仓库：`F:\wbwtty`；临时/下载：`F:\wbwtty-temp`
+- Rust：`RUSTUP_HOME=D:\rustup`、`CARGO_HOME=D:\cargo`（cargo/rustc **1.99.0**、
+  rustup 1.29.0，toolchain `stable-x86_64-pc-windows-gnu`，含 linux-gnu target 供交叉检查）
+- MSYS2：`D:\msys`（ucrt64，阶段 2 起的 gtk3 安装；workspace 构建已验证）
+- **路径/环境变量一律「项目盘符优先、旧机固定路径兜底」的候选探测**（`scripts/env.ps1`，
+  `ci-local.ps1` 点号引入同一份逻辑，候选不存在自动跳过）；**`.ps1` 必须 UTF-8 带 BOM**
+  （PS 5.1 无 BOM 按 GBK 解码会吞换行——env.ps1 曾因此语法错）
+- 每次开新终端：`. .\scripts\env.ps1`（输出应见 `rustup=D:\rustup cargo=D:\cargo
+  msys=D:\msys\ucrt64\bin`）
+- 代理：127.0.0.1:7890（crates.io/GitHub 直连可用）
+- gh CLI：已认证 wbw121124（scopes 含 repo/workflow；仓库 public，未认证 REST 也可读结论，
+  job logs 需认证）
+- 换机历史：2026-10-05 wbw/MoMo（Win11 22621、`G:\wbwtty`）→ 2026-10-06 回到本机
+  （`F:\wbwtty`；旧记录保留在 §"Linux GTK 实测"与 plan.md §6）
+- 范围约定：只在 `F:\wbwtty` 内改文件；下载/解压 `F:\wbwtty-temp`；不扫全盘
+
+## MSYS2 环境（本机 `D:\msys`）
+
+- 本机（Win10 LTSC，2026-10-06）：MSYS2 在 **`D:\msys`**（ucrt64；阶段 2 安装并补装
+  gtk3/pkgconf）→ `scripts/env.ps1` 候选探测 `<盘符>:\msys` 不存在 → 命中 `D:\msys` 前置
+  PATH；本机 workspace 构建（含 term-render-gtk）已验证可用（ci-local 全绿）
+- 历史（2026-10-05 wbw/MoMo 机）：MSYS2 预装 `E:\吴邦玮\项目\mymsys2`（ucrt64 gcc 16.2.0），
+  补装 `mingw-w64-ucrt-x86_64-gtk3 pkgconf` → gtk3 **3.24.52**、pangocairo 1.58.2
+  （tuna 镜像对代理 403 → 去代理直连成功）；该路径仍保留在 env.ps1 候选列表中
+
+## Linux GTK 实测（Ubuntu 20.04，2026-10-06）
+
+在 Windows（MSYS2）之外的**第二平台**实测 GTK 渲染器，仓库位于 U 盘
+`/media/noi/wbw_121124 的 USB 闪存盘/wbwtty`，主机 K404-B111（X11 `DISPLAY=:0`）：
+
+- 环境补装（初始状态：无任何 rustup toolchain、有 GTK3 运行库但缺 `libgtk-3-dev`）：
+  1. `rustup default stable` → rustc/cargo **1.99.0**
+  2. `sudo apt-get install -y libgtk-3-dev` → gtk+-3.0 **3.24.20**（连带 epoxy/wayland/xkbcommon dev）
+  3. 校验：`pkg-config --modversion gtk+-3.0 pangocairo` → `3.24.20` / `1.44.7`
+- 测试结果（全部通过）：
+  | 项 | 命令 | 结果 |
+  |---|---|---|
+  | 单元+集成 | `cargo test -p term-render-gtk` | **39/39**（31 单元 + 8 集成 `pipeline.rs`，0 失败） |
+  | 链接/运行时冒烟 | `cargo run -p term-render-gtk --example gtk_smoke` | `gtk::init OK - GTK3 linked and loadable`，退出码 0 |
+  | 窗口视觉核验 | `cargo run -p term-render-gtk --example demo_window` + `xwininfo` + `gnome-screenshot` | 窗口 `"term-render-gtk demo"` 800x600 存在；截图可见帧计数、真彩色渐变、下划线/删除线/斜体、移动方块（局部 damage）、底行宽字符 `宽字符 中文abc é 完成` |
+- 副作用：`Cargo.lock` 跨机带来的 `version = 4→3` 头部差异已 `git checkout` 恢复，
+  **工作树干净**（`cargo metadata` 仍可解析 v4）
+- 结论：GTK 渲染器在 **Windows(MSYS2)/Ubuntu 两平台均实测通过**，与 CI `build-test`
+  的 Linux 权威验证一致
 
 ## 已知问题 / 阻塞
 
@@ -178,11 +233,11 @@ std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo te
   GTK 渲染的权威验证在 Ubuntu + 本机 MSYS2
 - ~~**ConPTY 阶段 3 阻塞**~~ ✅ 已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 全绿，
   见"进行中（阶段 3）"）
-- **CI run #6 遗留（待修）**：`build-test (msys2-ucrt64-latest)` "Environment sanity" 失败、
-  ubuntu/macos "Test workspace" 挂 2h13m 被取消 → 用 gh 拉日志定位；`build-test` 缺
-  `timeout-minutes`（挂死 2h 才暴露）
-- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行，
-  或少量用 WSL Ubuntu-22.04 跑（用户约定：WSL 仅用于 test）；本机以 linux 目标
+- ~~**CI run #6/#7/#8 失败（probe 竞态 / msys2 rustc PATH / unix roundtrip 挂死 6h）**~~
+  ✅ 已诊断并修复（含全 job `timeout-minutes`），**待 push 后 CI 全绿确认**，
+  见"进行中（阶段 3）→ CI run #7/#8 失败诊断与修复"
+- `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行
+  （**本机无 WSL**，用户原约定的"WSL 仅用于 test"在本机不适用）；本机以 linux 目标
   `cargo check --all-targets` 把编译关（ci-local 步骤 4b）
 
 ## SDK 兼容性结论（摘要，详见 docs/sdk-compat-matrix.md）
@@ -211,5 +266,6 @@ std 句柄阻塞已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`），`cargo te
 - 提交：Conventional Commits，单一逻辑变更；提交前相关模块构建+测试通过
 - 分支：main 稳定；`feature/<模块>`、`fix/<简述>`，CI 通过后合回
 - 标签：`v0.x.0-stageN`，仅打在 main；文档随代码同步更新
-- 路径：按仓库所在盘符检测（`scripts/env.ps1`）；下载/解压 `<盘符>:\wbwtty-temp`；
-  只在 `G:\wbwtty` 内改文件；旧机历史记录（docs/header-verification.md 等）保留原文不改写
+- 路径：**项目盘符优先的候选探测**（`scripts/env.ps1`，`ci-local.ps1` 点号引入同一份逻辑，
+  候选缺失自动跳过）；下载/解压 `<项目盘符>:\wbwtty-temp`；只在当前仓库 `F:\wbwtty` 内改文件；
+  **`.ps1` 必须 UTF-8 带 BOM**；旧机历史记录（docs/header-verification.md 等）保留原文不改写

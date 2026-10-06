@@ -20,20 +20,64 @@ fn spawn(opts: &SpawnOptions) -> Box<dyn Pty> {
     pty_core::spawn(opts).expect("ConPTY spawn failed")
 }
 
-/// 读到命中 `needle`、EOF 或错误（阻塞式读，靠看门狗兜底）。
+/// 去掉 CSI/OSC 等转义序列：resize 重绘会产生 `ESC[137X`/`ESC[53H`，
+/// 直接在原始字节上匹配会把重绘误当成 `mode con` 的纯文本输出。
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+            continue;
+        }
+        match it.peek().copied() {
+            Some('[') => {
+                it.next();
+                for c2 in it.by_ref() {
+                    if ('\u{40}'..='\u{7e}').contains(&c2) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                it.next();
+                while let Some(c2) = it.next() {
+                    if c2 == '\u{7}' {
+                        break;
+                    }
+                    if c2 == '\u{1b}' && it.peek() == Some(&'\\') {
+                        it.next();
+                        break;
+                    }
+                }
+            }
+            Some(_) => {
+                it.next();
+            }
+            None => {}
+        }
+    }
+    out
+}
+
+/// 读到去转义后的文本命中 `needle`、EOF 或错误（阻塞式读，靠看门狗兜底）。
 fn read_until(pty: &mut dyn Pty, needle: &str, deadline: Duration) -> String {
+    read_until_all(pty, &[needle], deadline)
+}
+
+/// 直到**全部** needle 都在纯文本里出现（或 EOF/超时）。
+fn read_until_all(pty: &mut dyn Pty, needles: &[&str], deadline: Duration) -> String {
     let start = Instant::now();
     let mut out: Vec<u8> = Vec::new();
     let mut buf = [0u8; 4096];
     while start.elapsed() < deadline {
+        let text = strip_ansi(&String::from_utf8_lossy(&out));
+        if needles.iter().all(|n| text.contains(n)) {
+            break;
+        }
         match pty.read(&mut buf) {
             Ok(0) => break,
-            Ok(n) => {
-                out.extend_from_slice(&buf[..n]);
-                if String::from_utf8_lossy(&out).contains(needle) {
-                    break;
-                }
-            }
+            Ok(n) => out.extend_from_slice(&buf[..n]),
             Err(e) => panic!("read failed: {e}"),
         }
     }
@@ -72,9 +116,11 @@ fn resize_applies_and_interactive_shell_echoes() {
     pty.resize(137, 53).expect("resize");
 
     pty.write(b"mode con\r").expect("write mode con");
-    let out = read_until(pty.as_mut(), "137", Duration::from_secs(20));
-    assert!(out.contains("137"), "mode con output: {out:?}");
-    assert!(out.contains("53"), "mode con output: {out:?}");
+    // resize 重绘的 `ESC[137X` 会先于 mode con 文本到达 → 等两个数字都在纯文本里
+    let out = read_until_all(pty.as_mut(), &["137", "53"], Duration::from_secs(20));
+    let plain = strip_ansi(&out);
+    assert!(plain.contains("137"), "mode con output: {plain:?}");
+    assert!(plain.contains("53"), "mode con output: {plain:?}");
 
     pty.write(b"exit\r").expect("write exit");
     let code = wait_exit(pty.as_mut(), Duration::from_secs(20));
