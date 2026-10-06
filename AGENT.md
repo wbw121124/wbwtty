@@ -1,28 +1,29 @@
 # AGENT.md — 项目状态与执行记录
 
-- 最近更新：2026-10-06（阶段 3 收尾 **round 2**：run #9 复盘——9 job 绿 / 3 job 红，再修
-  conpty env 读竞态 + interrupt 重发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
-- 上次更新：2026-10-06（round 1：CI run #7/#8 三项失败诊断与修复 + env.ps1 盘符候选探测/BOM；
-  Linux GTK 实测 39/39 通过）
+- 最近更新：2026-10-06（阶段 3 收尾 **round 3**：run #10 后定案 interrupt 根因——runner
+  启动链 `CREATE_NEW_PROCESS_GROUP` 隐式“忽略 Ctrl+C”属性**可继承** → 测试 spawn 前清
+  继承 ignore；本地 0x200 标志精确复现，CTRL_BREAK 兜底弯路已弃）
+- 上次更新：2026-10-06（round 2：run #9 复盘——conpty env 读竞态 + interrupt 重发 ETX、
+  macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）
 
 ## 当前 Git 状态
 
-- 当前分支：`fix/ci-stage3-green`（round 1 已合 main 并推送；**round 2 改动在工作树待提交**）
-- main = `653ba8c`（`Merge 'fix/ci-stage3-green'`，round 1 四提交 `fix:`×2 + `ci:` + `docs:`，
-  含 tag `v0.4.0-stage3` 之后的 CI 修复），已推送 origin
+- 当前分支：`fix/ci-stage3-green`（round 3 修复与文档提交于此，随后 `--no-ff` 合 main 并推送）
+- main = `2d79f4c`（`Merge branch 'fix/ci-stage3-green'`，round 2 四提交已推送）→ run #10：
+  **10 job 绿 / 2 job 红**（仅 interrupt 在 windows-latest + msys2 双挂，round 3 已根因修复）
 - 已打标签：`v0.1.0-stage0`、`v0.2.0-stage1`、`v0.3.0-stage2`、`v0.4.0-stage3`
-- 工作树未提交（round 2）：`.github/workflows/ci.yml`（`PKG_CONFIG_ALLOW_CROSS`）、
-  `crates/pty-conpty/tests/spawn_conpty.rs`（env/cwd 读竞态 + interrupt 重发 ETX）、
-  `crates/pty-unix/tests/spawn_unix.rs`（macos `/tmp` 符号链接）、`plan.md`/`AGENT.md`
+- 本轮工作树改动：`crates/pty-conpty/tests/spawn_conpty.rs`（interrupt spawn 前清继承
+  `SetConsoleCtrlHandler(NULL,FALSE)`）、`plan.md`/`AGENT.md`（run #10 与 round 3 记录）
 - 其余分支均未删除（用户要求保留）：`feature/pty-core`、`feature/term-input`、
   `feature/term-render-gtk`、`feature/vt-parser`、`feature/pty-conpty`
-- 待办：ci-local 全绿 → round 2 提交 → 合 main → 推送 → gh 盯 CI 全绿 → 关闭阶段 3
+- 待办：fix 分支提交（`fix:` + `docs:`）→ 合 main → 推送 → gh 盯 CI 全绿 → 关闭阶段 3
 
 ## 当前阶段
 
 **阶段 2 完成**（`v0.3.0-stage2`）。**阶段 3 pty-conpty 已交付**（main 含代码 + 标签
-`v0.4.0-stage3`）；CI round 1 修复合入后 **run #9：9 job 绿 / 3 job 红**，round 2 修复
-已就绪（见"CI run #9 与 round 2"），待推送确认 CI 全绿即关闭阶段 3、进入阶段 4。
+`v0.4.0-stage3`）；round 1+2 合入 main `2d79f4c` 推送后 **run #10：10 job 绿 / 2 job 红**
+（仅 interrupt 双挂），round 3 根因修复已就绪（见"CI run #10 与 round 3"），待推送确认
+CI 全绿即关闭阶段 3、进入阶段 4。
 
 ## 模块划分（计划）
 
@@ -31,7 +32,7 @@
 | vt-parser | VT 序列解析 + 终端状态（网格/颜色/光标/滚动缓冲/damage） | ✅ 阶段 1（58 单元 + 13 集成测试） |
 | pty-core | PTY 统一抽象（trait + C ABI），无平台实现 | ✅ 阶段 1（注册/选择/回退 + FFI，9 测试） |
 | pty-unix | openpty/forkpty 后端（Linux/macOS） | ✅ 阶段 1（POSIX 实现；Windows 空壳；unix 测试由 CI 执行） |
-| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（合 main `9d0920a` + 标签 `v0.4.0-stage3`；17/17 全绿；CI 修复已提交待全绿） |
+| pty-conpty | ConPTY 后端（Win10 1809+，全部动态加载） | ✅ 阶段 3（合 main `9d0920a` + 标签 `v0.4.0-stage3`；17/17 全绿；CI round 1–3 修复合入，待全绿） |
 | pty-win10-early | 1809 前桥接：控制台 API 直驱 / Cygwin PTY / WinPTY 回退 | 未开始（阶段 4） |
 | term-render-gtk | GTK3+Cairo/OpenGL 渲染 | ✅ 阶段 2（31 单元 + 8 集成测试；Windows(MSYS2) 与 Linux(Ubuntu 20.04) 双平台实测通过） |
 | term-render-qt | Qt 渲染（可选，backlog） | backlog |
@@ -189,6 +190,33 @@ round 1 合入 main `653ba8c` 推送后 run #9：**9 job 绿**（docs-check、ap
 round 2 本机验证：`cargo test -p pty-conpty` **17/17 ×3**（重发版 interrupt ~1.3s）、
 ci-local 全绿 → 提交合入推送，再盯下一轮。
 
+### CI run #10 与 round 3（2026-10-06）
+
+round 2 合入 main `2d79f4c` 推送后 run #10：**10 job 绿**（macos `/private/tmp` 修复生效、
+msys2 build 过、windows 集成 5/6、ubuntu/docs/白名单/7×矩阵）、**2 job 红**：
+`interrupt_stops_long_running_child` 在 windows-latest 与 msys2 **均 25.83s** 挂在
+`child should exit after Ctrl+C`（每 500ms 重发 ETX 25s 无效）。
+
+诊断链（本地定案，未多烧 CI）：
+
+1. 同 job `mode con\r` 交互通过 → 输入管道通；本地 `CREATE_NO_WINDOW`（无控制台）模拟
+   通过 → 排除“测试进程无控制台”
+2. **本地 python `creationflags=0x200`（CREATE_NEW_PROCESS_GROUP）启动 cargo test →
+   与 CI 一字不差复现**（26s 同断言失败；flag=0 则 1.3s 过）
+3. 根因：带该标志创建的进程隐式 `SetConsoleCtrlHandler(NULL,TRUE)`（忽略 Ctrl+C），
+   且该属性**可继承** → CI runner 启动链 → 测试进程 → cmd → ping 全链继承 →
+   conhost 把 ETX 转成 Ctrl+C 事件投递成功，但各进程按继承属性跳过处理器 → 无人退出
+4. 修法：测试在 spawn 前 `SetConsoleCtrlHandler(NULL,FALSE)` 清继承 ignore → 复现条件
+   下 1.30s 过、正常环境 6/6 过
+5. 弯路（已弃仅记）：CTRL_BREAK 兜底（AttachConsole + GenerateConsoleCtrlEvent）——
+   group id 0 广播对伪控制台不投递；`NULL,TRUE` 挡不住 Ctrl+Break 会自杀
+   （0xC000013A）；定向投递成功也杀不掉 cmd → 全部移除
+6. 产品级不改父进程 handler（库副作用不可接受）→ 记入已知限制：被此类启动链保护的
+   应用需自行清 ignore 才能让 ConPTY 子进程收到 Ctrl+C
+
+round 3 本机验证：`cargo test -p pty-conpty` 6/6（含单元 17/17）×2、flag=0x200 复现条件
+×2、新增代码 fmt 干净、ci-local **PASSED** → 提交合入推送盯 CI。
+
 ## 本机环境（当前机器，2026-10-06；非 MoMo）
 
 - OS：**Windows 10 企业版 LTSC（build 10.0.17763 / 1809）**→ ConPTY 本机可用；
@@ -250,9 +278,9 @@ ci-local 全绿 → 提交合入推送，再盯下一轮。
 - ~~**ConPTY 阶段 3 阻塞**~~ ✅ 已修复（`STARTF_USESTDHANDLES` + `hStd*=NULL`，17/17 全绿，
   见"进行中（阶段 3）"）
 - ~~**CI run #6/#7/#8 失败（probe 竞态 / msys2 rustc PATH / unix roundtrip 挂死 6h）**~~
-  ✅ round 1 已修复并合入（含全 job `timeout-minutes`）；**run #9 剩 3 项**（conpty env 竞态 +
-  interrupt 单发 ETX、macos `/tmp` 符号链接、msys2 `PKG_CONFIG_ALLOW_CROSS`）✅ round 2
-  已修复待推送确认，见"CI run #9 与 round 2"
+  ✅ round 1 已修复并合入（含全 job `timeout-minutes`）；~~run #9 剩 3 项~~ ✅ round 2
+  已合入（main `2d79f4c`）；~~run #10 剩 interrupt 双挂~~ ✅ round 3 根因修复
+  （清继承 `SetConsoleCtrlHandler(NULL,FALSE)`）已就绪，见"CI run #10 与 round 3"
 - `pty-unix` 的 unix 集成测试本机（Windows）不可执行 → 由 CI ubuntu/macos 运行
   （**本机无 WSL**，用户原约定的"WSL 仅用于 test"在本机不适用）；本机以 linux 目标
   `cargo check --all-targets` 把编译关（ci-local 步骤 4b）

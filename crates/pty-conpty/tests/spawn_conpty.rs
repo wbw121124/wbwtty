@@ -157,20 +157,22 @@ fn env_and_cwd_are_applied() {
 #[test]
 fn interrupt_stops_long_running_child() {
     watchdog(60);
+    // CI runner 启动链某层用 CREATE_NEW_PROCESS_GROUP 创建 → 祖先进程隐式
+    // SetConsoleCtrlHandler(NULL,TRUE)，且“忽略 Ctrl+C”属性可继承 → 子进程一路
+    // 继承 → ETX 事件送达却无人处理（本地用同标志可复现）。先清再 spawn。
+    unsafe {
+        SetConsoleCtrlHandler(None, 0);
+    }
     // ping 需 300 秒才自然结束：若 ETX → Ctrl+C 生效应在数秒内退出。
-    // CI（Server 2022）实测单发 ETX 不生效 → 每 500ms 重发直到退出或截止。
     let opts = SpawnOptions::new("cmd.exe").args(["/c", "ping -n 300 127.0.0.1 >nul"]);
     let mut pty = spawn(&opts);
 
     std::thread::sleep(Duration::from_millis(800));
-    let deadline = Instant::now() + Duration::from_secs(25);
+    let deadline = Instant::now() + Duration::from_secs(5);
     let mut code = None;
-    loop {
+    while Instant::now() < deadline {
         if let Ok(Some(c)) = pty.try_wait() {
             code = Some(c);
-            break;
-        }
-        if Instant::now() >= deadline {
             break;
         }
         // 写失败（管道已关）不致命：下一轮 try_wait 收割
@@ -178,6 +180,13 @@ fn interrupt_stops_long_running_child() {
         std::thread::sleep(Duration::from_millis(500));
     }
     assert!(code.is_some(), "child should exit after Ctrl+C");
+}
+
+extern "system" {
+    fn SetConsoleCtrlHandler(
+        handler: Option<unsafe extern "system" fn(u32) -> i32>,
+        add: i32,
+    ) -> i32;
 }
 
 #[test]
