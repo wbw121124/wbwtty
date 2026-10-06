@@ -21,6 +21,15 @@ fn read_until(pty: &mut dyn pty_core::Pty, needle: &str) -> String {
     acc
 }
 
+/// 阻塞 read 触发不了 read_until 的 deadline 断言 → 超时兜底中止（与 pty-conpty 测试同款）。
+fn watchdog(seconds: u64) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(seconds));
+        eprintln!("watchdog: 超过 {seconds}s，中止（测试可能挂死）");
+        std::process::abort();
+    });
+}
+
 #[test]
 fn is_available_on_posix() {
     assert!(pty_unix::is_available());
@@ -28,6 +37,7 @@ fn is_available_on_posix() {
 
 #[test]
 fn spawn_echo_banner_and_eof() {
+    watchdog(30);
     pty_unix::register();
     let mut pty = spawn(&SpawnOptions::new("/bin/sh").args(["-c", "printf 'BANNER:%s' ok"]))
         .expect("spawn sh");
@@ -59,6 +69,7 @@ fn spawn_echo_banner_and_eof() {
 
 #[test]
 fn spawn_cwd_env_and_write_roundtrip() {
+    watchdog(30);
     pty_unix::register();
     // cwd=/tmp、env FOO=bar、读一行后回显
     let mut pty = spawn(
@@ -68,7 +79,9 @@ fn spawn_cwd_env_and_write_roundtrip() {
             .env("FOO", "bar"),
     )
     .expect("spawn");
-    let out = read_until(pty.as_mut(), "|got:");
+    // 子进程先打印 OUT: 再阻塞等 stdin：必须先读到 OUT: 才能写。
+    // 旧顺序（先等 |got: 再写）会让阻塞 read 永远等不到 needle → CI 曾挂死 6h。
+    let out = read_until(pty.as_mut(), "OUT:/tmp:bar");
     assert!(out.contains("OUT:/tmp:bar"), "got {out:?}");
 
     pty.write(b"hi\n").expect("write");
@@ -79,6 +92,7 @@ fn spawn_cwd_env_and_write_roundtrip() {
 
 #[test]
 fn resize_and_signal_term() {
+    watchdog(30);
     pty_unix::register();
     let mut pty = spawn(&SpawnOptions::new("/bin/sh").args(["-c", "sleep 30"]).size(60, 20))
         .expect("spawn");
@@ -100,6 +114,7 @@ fn resize_and_signal_term() {
 
 #[test]
 fn missing_program_exits_127() {
+    watchdog(30);
     pty_unix::register();
     let mut pty = spawn(&SpawnOptions::new("definitely-not-a-real-program-xyz"))
         .expect("spawn mechanics succeed; exec failure surfaces as child exit");
