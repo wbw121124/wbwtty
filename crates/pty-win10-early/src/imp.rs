@@ -1,17 +1,23 @@
-//! 第一刀直驱实现：共享隐藏控制台 + 轮询 → VT 合成（阶段 4）。
+//! 直驱实现：共享隐藏控制台 + 输出源二选一（第二刀 conhook 管道 / 第一刀
+//! 轮询兜底）→ VT 合成（阶段 4）。
 //!
 //! 设计依据：`docs/win10-early-bridge.md` §3.1（模型）/§3.2（输出）/§3.3（输入）/
 //! §3.4（resize）/§3.5（信号）/§3.6（生命周期）。要点：
 //! - **全局互斥**：Windows 一进程一控制台 → spawn 到 close 持有 `CONSOLE_LOCK`
 //! - spawn：`FreeConsole` → `AllocConsole` → 隐藏窗口 → `CONIN$/CONOUT$` 句柄
 //!   → 忽略 Ctrl+C → 初始 resize → `CreateProcessW`（**不带** `CREATE_NEW_PROCESS_GROUP`）
-//! - 轮询线程：16ms `WaitForSingleObject` + 全屏 `ReadConsoleOutputW` → diff →
-//!   VT 入队（`vt_synth`）；子进程退出 → 最终帧 → `eof` → `read` 转 `Ok(0)`
-//! - close：杀子进程 → join 轮询 → 关句柄 → 恢复 handler → `FreeConsole` → 放锁
+//! - **第二刀**：DLL 在位 → 管道服务端 + `WBWTTY_EARLY_PIPE` 环境变量 +
+//!   `CREATE_SUSPENDED` 创建 → 注入 conhook → `ResumeThread` → 读帧线程；
+//!   注入失败/5s 连不上 → 关管降级为第一刀轮询（子进程照跑，不重建）
+//! - **第一刀轮询**：16ms `WaitForSingleObject` + 全屏 `ReadConsoleOutputW` →
+//!   diff → VT 入队（`vt_synth`）；子进程退出 → 最终帧 → `eof` → `read` 转 `Ok(0)`
+//! - close：杀子进程 → join 读线程/轮询 → 关句柄 → 恢复 handler → `FreeConsole` → 放锁
 
 use std::collections::VecDeque;
+use std::ffi::OsString;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
+use std::path::Path;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -23,14 +29,20 @@ use pty_core::{
 };
 
 use crate::cmdline::{build_command_line, build_environment};
+use crate::inject::{self, PipeServer, Sink};
 use crate::input_vt::VtDecoder;
 use crate::sys;
 use crate::vt_synth::{self, Screen};
 
 const PRIORITY: u8 = 30;
 const POLL: Duration = Duration::from_millis(16);
+/// 第二刀管道连接等待上限（超时 → 关管降级轮询）
+const PIPE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// 单帧缓冲上限（防御异常大缓冲的分配）
 const MAX_CELLS: usize = 1_048_576;
+
+/// 最近一次 EarlyPty spawn 是否走通 conhook 管道（集成测试断言第二刀生效）。
+static LAST_SPAWN_PIPED: AtomicBool = AtomicBool::new(false);
 
 /// 全进程一个控制台（Windows 语义）→ EarlyPty 全局互斥：持有至 close/Drop。
 /// 用 AtomicBool 而非 `Mutex` 守卫——`MutexGuard` 非 `Send`，会破坏 `Pty: Send`。
@@ -49,6 +61,11 @@ fn release_console_lock() {
 
 pub fn is_available() -> bool {
     true
+}
+
+/// 最近一次 spawn 是否激活 conhook 管道路径（第二刀；`false` = 第一刀轮询）。
+pub fn last_spawn_used_pipe() -> bool {
+    LAST_SPAWN_PIPED.load(Ordering::Acquire)
 }
 
 pub fn register() {
@@ -300,6 +317,8 @@ struct QueueState {
 struct Shared {
     q: Mutex<QueueState>,
     cv: Condvar,
+    /// 管道模式断管且子进程仍活 → `read()` 报 `BrokenPipe`（设计 §6 降级语义）
+    broken: AtomicBool,
 }
 
 impl Shared {
@@ -307,6 +326,7 @@ impl Shared {
         Self {
             q: Mutex::new(QueueState { bytes: VecDeque::new(), eof: false }),
             cv: Condvar::new(),
+            broken: AtomicBool::new(false),
         }
     }
     fn push(&self, vt: Vec<u8>) {
@@ -320,6 +340,27 @@ impl Shared {
         q.eof = true;
         drop(q);
         self.cv.notify_all();
+    }
+    fn set_broken(&self) {
+        self.broken.store(true, Ordering::Release);
+        self.cv.notify_all(); // 唤醒阻塞中的 read()
+    }
+}
+
+/// 读线程帧 → [`Shared`] 的 [`Sink`] 适配（第二刀输出源与轮询共用同一队列）。
+struct SharedSink {
+    shared: Arc<Shared>,
+}
+
+impl Sink for SharedSink {
+    fn vt(&self, bytes: Vec<u8>) {
+        self.shared.push(bytes);
+    }
+    fn exit(&self) {
+        self.shared.finish(); // EXIT 帧/子进程死亡 → eof（退出码仍以句柄收割为准）
+    }
+    fn broken(&self) {
+        self.shared.set_broken();
     }
 }
 
@@ -357,7 +398,12 @@ struct EarlyPty {
     h_process: usize,
     pid: u32,
     shared: Arc<Shared>,
+    /// 第一刀轮询线程（与 `reader` 互斥单活）
     poll: Option<JoinHandle<()>>,
+    /// 第二刀 conhook 读线程（管道模式；close 时 join）
+    reader: Option<JoinHandle<()>>,
+    /// 第二刀管道服务端（管道模式；resize 发 RESIZE 帧、close 关管）
+    server: Option<Arc<PipeServer>>,
     decoder: VtDecoder,
     /// spawn 期间 `SetConsoleCtrlHandler(NULL, TRUE)` 是否生效（close 恢复）
     handler_ignore: bool,
@@ -435,9 +481,23 @@ impl EarlyPty {
 
         // 5) 子进程（默认进程组——阶段 3 实证不能用 CREATE_NEW_PROCESS_GROUP）；
         //    标准句柄 = 我们的 CONIN$/CONOUT$（可继承），否则 cmd 无输出可言；
-        //    属性列表把继承范围钉死在这两个句柄（防 runner 管道泄漏给子进程）
+        //    属性列表把继承范围钉死在这两个句柄（防 runner 管道泄漏给子进程）。
+        //    第二刀：conhook.dll 在位且管道服务端建成 → 挂起创建 + 注入 +
+        //    事件驱动读帧；任一环不可用 → 纯轮询（第一刀路径，行为不变）
+        let dll = inject::hook_dll_path();
+        let server: Option<Arc<PipeServer>> = if dll.is_some() {
+            inject::PipeServer::create(std::process::id())
+                .ok()
+                .map(|(s, _name)| s)
+        } else {
+            None
+        };
+        let mut env_overrides = opts.env.clone();
+        if let Some(s) = &server {
+            env_overrides.push((OsString::from(inject::PIPE_ENV), s.env_value()));
+        }
         let mut cmdline = build_command_line(opts);
-        let env = build_environment(&opts.env);
+        let env = build_environment(&env_overrides);
         let env_empty = env.is_empty();
         let cwd_wide: Option<Vec<u16>> = opts.cwd.as_ref().map(|p| {
             p.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
@@ -459,8 +519,12 @@ impl EarlyPty {
         si.lpAttributeList = attr_list.ptr;
         let mut pi: sys::ProcessInformation = unsafe { std::mem::zeroed() };
 
-        let flags = sys::EXTENDED_STARTUPINFO_PRESENT
+        let mut flags = sys::EXTENDED_STARTUPINFO_PRESENT
             | if env_empty { 0 } else { sys::CREATE_UNICODE_ENVIRONMENT };
+        let suspended = server.is_some();
+        if suspended {
+            flags |= sys::CREATE_SUSPENDED; // 注入须在主模块执行前（IAT 干净）
+        }
         let env_ptr = if env_empty {
             ptr::null()
         } else {
@@ -485,6 +549,7 @@ impl EarlyPty {
         let create_err = (created == 0).then(|| io::Error::last_os_error());
         drop(attr_list); // CreateProcessW 已消费，立即释放属性列表
         if let Some(e) = create_err {
+            // server 随作用域退出自动关管（PipeServer::Drop）
             release_console(h_in, h_out, false, &origin);
             return Err(SpawnError::Spawn(format!(
                 "CreateProcessW: {e} [cmdline={} env_null={env_empty} cwd={} \
@@ -494,15 +559,30 @@ impl EarlyPty {
                 si.StartupInfo.cb,
             )));
         }
-        unsafe { sys::CloseHandle(pi.hThread) };
+        // 挂起态保留 hThread 至 ResumeThread；普通路径立即关
+        if !suspended {
+            unsafe { sys::CloseHandle(pi.hThread) };
+        }
+        let h_process = pi.hProcess as usize;
 
-        // 5) 子进程已生成（继承到 ignore=FALSE）→ 现在才给宿主置忽略，
+        // 第二刀注入（子进程挂起、IAT 干净）。失败**不杀不重建**：ResumeThread
+        // 后没有 hook = 天然普通子进程 → 输出源自动落到第一刀轮询
+        let shared = Arc::new(Shared::new());
+        let injected = match (&server, dll) {
+            (Some(_), Some(d)) => Some(inject::inject_dll(h_process, Path::new(d))),
+            _ => None,
+        };
+
+        // 6) 子进程已生成（继承到 ignore=FALSE）→ 现在才给宿主置忽略，
         //    否则 Interrupt 广播会杀死宿主自身；失败即 fail-fast
         if unsafe { sys::SetConsoleCtrlHandler(None, 1) } == 0 {
             let e = io::Error::last_os_error();
             unsafe {
-                let _ = terminate_child(pi.hProcess as usize);
+                let _ = terminate_child(h_process);
                 sys::CloseHandle(pi.hProcess);
+                if suspended {
+                    sys::CloseHandle(pi.hThread);
+                }
             }
             release_console(h_in, h_out, false, &origin);
             return Err(SpawnError::Spawn(format!(
@@ -511,21 +591,55 @@ impl EarlyPty {
         }
         let handler_ignore = true;
 
-        // 6) 轮询线程
-        let shared = Arc::new(Shared::new());
-        let poll = {
+        // 7) 恢复子进程 → 输出源：conhook 管道读线程（第二刀）或轮询（第一刀）
+        let mut reader: Option<JoinHandle<()>> = None;
+        let mut piped = false;
+        if let Some(srv) = server.clone() {
+            let resumed = unsafe { sys::ResumeThread(pi.hThread as sys::HANDLE) };
+            unsafe { sys::CloseHandle(pi.hThread) };
+            if resumed == 0xFFFF_FFFF {
+                let e = io::Error::last_os_error();
+                unsafe {
+                    let _ = terminate_child(h_process);
+                    sys::CloseHandle(pi.hProcess);
+                }
+                release_console(h_in, h_out, true, &origin);
+                return Err(SpawnError::Spawn(format!("ResumeThread: {e}")));
+            }
+            match injected {
+                Some(Ok(())) => {
+                    let sink: Arc<dyn Sink> = Arc::new(SharedSink { shared: shared.clone() });
+                    match inject::start_reader(srv, sink, h_process, PIPE_CONNECT_TIMEOUT) {
+                        Ok(h) => {
+                            reader = Some(h);
+                            piped = true;
+                        }
+                        // 5s 没连上：start_reader 已关管（conhook 后到即断、自行
+                        // 卸钩，杜绝双路输出）→ 子进程照跑，轮询兜底
+                        Err(_) => {}
+                    }
+                }
+                _ => srv.close_now(), // 注入失败 → 关管（不会有客户端），纯轮询
+            }
+        }
+        let poll = if piped {
+            None
+        } else {
             let s = shared.clone();
-            let (ho, hp) = (h_out, pi.hProcess as usize);
-            thread::spawn(move || poll_loop(ho, hp, s))
+            let (ho, hp) = (h_out, h_process);
+            Some(thread::spawn(move || poll_loop(ho, hp, s)))
         };
+        LAST_SPAWN_PIPED.store(piped, Ordering::Release);
 
         Ok(Box::new(EarlyPty {
             h_in,
             h_out,
-            h_process: pi.hProcess as usize,
+            h_process,
             pid: pi.dwProcessId,
             shared,
-            poll: Some(poll),
+            poll,
+            reader,
+            server: if piped { server } else { None },
             decoder: VtDecoder::new(),
             handler_ignore,
             console_acquired: true,
@@ -587,6 +701,12 @@ impl Pty for EarlyPty {
             if q.eof {
                 return Ok(0);
             }
+            if self.shared.broken.load(Ordering::Acquire) {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "conhook pipe broken (child alive)",
+                ));
+            }
             q = self.shared.cv.wait(q).unwrap_or_else(|e| e.into_inner());
         }
     }
@@ -618,7 +738,12 @@ impl Pty for EarlyPty {
         if self.closed {
             return Err(io::Error::new(io::ErrorKind::NotConnected, "PTY closed"));
         }
-        unsafe { resize_console(self.h_out as sys::HANDLE, cols, rows) }
+        unsafe { resize_console(self.h_out as sys::HANDLE, cols, rows) }?;
+        // 第二刀：通知 conhook 按新尺寸改虚拟网格（断管则读线程走 broken）
+        if let Some(s) = &self.server {
+            let _ = s.send_resize(cols, rows);
+        }
+        Ok(())
     }
 
     fn send_signal(&mut self, sig: Signal) -> io::Result<()> {
@@ -649,15 +774,22 @@ impl Pty for EarlyPty {
         }
         self.closed = true;
 
-        // 1) 杀子进程（同时唤醒轮询线程走最终帧）
+        // 1) 杀子进程（唤醒读线程/轮询线程走最终帧）
         let _ = terminate_child(self.h_process);
-        // 2) join 轮询（其内部补最终帧 + eof）
+        // 2) join 读线程（子进程已死 → ~500ms 内退出；其后关管无在途 I/O）
+        if let Some(h) = self.reader.take() {
+            let _ = h.join();
+        }
+        // 3) 关管（PipeServer::Drop 兜底）+ join 轮询（其内部补最终帧 + eof）
+        if let Some(s) = self.server.take() {
+            s.close_now();
+        }
         if let Some(h) = self.poll.take() {
             let _ = h.join();
         }
-        // 3) 防御：线程异常退出时保证 eof，避免 read 挂死
+        // 4) 防御：线程异常退出时保证 eof，避免 read 挂死
         self.shared.finish();
-        // 4) 收割退出码（关句柄前）+ 关句柄
+        // 5) 收割退出码（关句柄前）+ 关句柄
         unsafe {
             if self.exit.is_none() {
                 let mut code: sys::DWORD = 0;
@@ -669,14 +801,14 @@ impl Pty for EarlyPty {
             sys::CloseHandle(self.h_out as sys::HANDLE);
             sys::CloseHandle(self.h_process as sys::HANDLE);
         }
-        // 5) 恢复 Ctrl+C handler + 摘除控制台 + 挂回宿主原控制台
+        // 6) 恢复 Ctrl+C handler + 摘除控制台 + 挂回宿主原控制台
         if self.handler_ignore {
             unsafe { sys::SetConsoleCtrlHandler(None, 0) };
             self.handler_ignore = false;
         }
         unsafe { sys::FreeConsole() };
         self.origin.restore();
-        // 6) 释放全局互斥
+        // 7) 释放全局互斥
         if self.console_acquired {
             release_console_lock();
             self.console_acquired = false;

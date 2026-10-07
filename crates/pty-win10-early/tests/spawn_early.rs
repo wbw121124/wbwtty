@@ -1,5 +1,5 @@
 #![cfg(windows)]
-//! 第一刀直驱（共享隐藏控制台 + 轮询）集成测试。
+//! 直驱集成测试（第二刀 conhook 管道为主输出源，第一刀轮询兜底）。
 //! 覆盖：本机 Win11 + CI windows-latest；强制走 pty-win10-early（注册表只挂它）。
 //!
 //! 每个测试自带 watchdog（`cargo test` 无默认超时，conpty/unix 同款惯例）；
@@ -176,4 +176,22 @@ fn kill_then_close_is_idempotent() {
     pty.close().expect("close 1");
     pty.close().expect("close 2 (idempotent)");
     drop(pty); // Drop → close（已关闭，幂等）
+}
+
+#[test]
+fn spawn_uses_conhook_pipe_when_dll_present() {
+    // 第二刀断言：build.rs 必须已构建 conhook.dll 且注入 + 管道连接走通。
+    // 注入/连接失败会静默回退轮询（功能仍正常），故必须显式断言才拦得住回退。
+    let opts = SpawnOptions::new("cmd.exe").args(["/c", "echo pipe-path-ok"]);
+    let mut pty = spawn(&opts);
+    watchdog(60);
+    assert!(
+        pty_win10_early::last_spawn_used_pipe(),
+        "conhook 管道未激活（DLL 缺失/注入被拒/5s 内未连接）——第二刀应为默认路径"
+    );
+
+    let out = read_until_all(pty.as_mut(), &["pipe-path-ok"], Duration::from_secs(20));
+    assert!(out.contains("pipe-path-ok"), "output: {out:?}");
+    let code = wait_exit(pty.as_mut(), Duration::from_secs(20));
+    assert_eq!(code, Some(0), "output: {out:?}");
 }

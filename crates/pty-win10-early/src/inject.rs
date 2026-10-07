@@ -12,8 +12,6 @@
 //!   → `frame::Parser` 拆帧 → [`Sink`] 分发；EXIT 帧 / 子进程死亡 = 正常收尾，
 //!   子进程仍活而断管 = 异常（`Sink::broken` → `read()` 报 `BrokenPipe`）。
 
-#![allow(dead_code)] // imp 接线（第二刀第三步）完成前的增量落地
-
 use std::ffi::OsString;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
@@ -88,7 +86,8 @@ impl PipeServer {
         ))
     }
 
-    /// 管道全名（写进环境块的值）。
+    /// 管道全名（写进环境块的值；诊断/日志备用）。
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -265,7 +264,18 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
     let mut parser = Parser::new();
     let mut clean = false;
     let mut chunk = vec![0u8; 64 * 1024];
+    let mut ticks: u32 = 0;
     loop {
+        // 每 ~100 次迭代（≤~600ms）探一次子进程：TerminateProcess 跳过
+        // DllMain → 不会发 EXIT 帧，对端句柄也可能挂着 → 仅靠断管检测收
+        // 不了尾（close 依赖本检查在有限时间内 join 读线程）
+        if ticks % 100 == 0
+            && unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
+                == sys::WAIT_OBJECT_0
+        {
+            break; // 循环后 alive=false → sink.exit() 正常收尾
+        }
+        ticks = ticks.wrapping_add(1);
         let mut avail: sys::DWORD = 0;
         let ok = unsafe {
             sys::PeekNamedPipe(h, ptr::null_mut(), 0, ptr::null_mut(), &mut avail, ptr::null_mut())
