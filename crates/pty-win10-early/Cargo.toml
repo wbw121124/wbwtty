@@ -7,3 +7,6 @@ description = "Windows 10 pre-1809 early PTY backend (console-API direct path); 
 
 [dependencies]
 pty-core = { path = "../pty-core" }
+
+[build-dependencies]
+cc = "1"
