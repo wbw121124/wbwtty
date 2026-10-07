@@ -1,8 +1,7 @@
 //! 构建 conhook.dll（第二刀注入的子进程钩子，`csrc/conhook.c` + `early_proto.c`）。
 //!
-//! - MSVC：用 `cc` 定位 `cl`（注册表发现，dev prompt 之外也可用）→ `/LD /O2 /MD`
-//!   `/MD` 动态链接 ucrt.dll（自带完整 vsnprintf/snprintf），避免 /MT 静态 CRT
-//!   下 LIBCMT.lib 缺 vsnprintf 导致 LNK2001 的坑。
+//! - MSVC：通过 vswhere 定位 VS 安装 → 调用 vcvarsall.bat 设置环境 → `cl /LD /O2 /MD`
+//!   `/MD` 动态链接 ucrt.dll（自带完整 vsnprintf/snprintf）。
 //! - GNU（msys2）：`gcc -shared -static-libgcc`；
 //! - 任一路径失败 → 不设 `WBWTTY_EARLY_HOOK_DLL` → `inject::hook_dll_path()`
 //!   返回 `None` → 注入禁用，spawn 自动回退第一刀轮询（降级不报错）。
@@ -10,7 +9,7 @@
 //! 对 `csrc/*.c` 做 `cl /c` 兼容编译（本脚本只负责产真实 DLL）。
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -42,29 +41,93 @@ fn main() {
     }
 }
 
+/// 用 vswhere 找 VS 安装，调 vcvarsall.bat 设置 INCLUDE/LIB/PATH，再 invoke cl。
 fn build_msvc(out: &PathBuf) -> bool {
-    let tool = match cc::Build::new().try_get_compiler() {
-        Ok(t) => t,
-        Err(e) => {
-            warning(&format!(
-                "conhook: no MSVC compiler ({e}); injection disabled"
-            ));
+    let vs_path = match find_vs_install() {
+        Some(p) => p,
+        None => {
+            warning("conhook: vswhere found no VS install; injection disabled");
             return false;
         }
     };
-    // /MD = 动态链接 ucrt.dll（自带 vsnprintf/snprintf 完整实现）。
-    // 用 /MT 静态 CRT 会链接 LIBCMT.lib，而 x64 LIBCMT 不导出 vsnprintf，
-    // 仅导出 legacy _vsnprintf，导致 LNK2001。
-    let mut cmd: Command = tool.to_command();
-    cmd.arg("/nologo");
-    cmd.arg("/LD");
-    cmd.arg("/O2");
-    cmd.arg("/MD");
-    cmd.arg(format!("/Fo{}\\", out.parent().unwrap().display()));
+    let vcvars = vs_path.join("VC\\Auxiliary\\Build\\vcvars64.bat");
+    if !vcvars.exists() {
+        warning(&format!(
+            "conhook: vcvars64.bat not found at {}; injection disabled",
+            vcvars.display()
+        ));
+        return false;
+    }
+    // 先跑 vcvarsall 把 env 设好，再从 PATH 拿 cl
+    let vcvars_out = match Command::new("cmd")
+        .args(["/C", vcvars.to_string_lossy().as_ref()])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        result => {
+            match result {
+                Ok(o) => {
+                    warning(&format!(
+                        "conhook: vcvars64.bat exited {}; injection disabled",
+                        o.status
+                    ));
+                    emit_output("vcvars", "stderr", &o.stderr);
+                }
+                Err(e) => {
+                    warning(&format!(
+                        "conhook: vcvars64.bat failed to start ({e}); injection disabled"
+                    ));
+                }
+            }
+            return false;
+        }
+    };
+    // 解析 vcvars 输出的 SET 变量，合并到当前环境
+    let mut cmd = Command::new("cl");
+    for line in String::from_utf8_lossy(&vcvars_out.stdout).lines() {
+        if let Some((k, v)) = line.split_once('=') {
+            if k.starts_with("SET ") {
+                let k = &k["SET ".len()..];
+                cmd.env(k, v);
+            }
+        }
+    }
+    // 同时确保 PATH 包含 cl.exe 所在目录
+    cmd.args([
+        "/nologo",
+        "/LD",
+        "/O2",
+        "/MD",
+    ]);
+    cmd.arg(format!("/Fo{}", out.parent().unwrap().display()));
     cmd.arg(format!("/Fe{}", out.display()));
     cmd.arg("csrc/conhook.c");
     cmd.arg("csrc/early_proto.c");
     run(cmd, "cl")
+}
+
+/// 用 vswhere 找最新 VS 安装路径（含 x86.x64 工具链）。
+fn find_vs_install() -> Option<PathBuf> {
+    let vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
+    let out = Command::new(vswhere)
+        .args([
+            "-latest",
+            "-products", "*",
+            "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "-property", "installationPath",
+            "-nocatalog",
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            let path = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !path.is_empty() && Path::new(&path).exists() {
+                return Some(PathBuf::from(path));
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 fn build_gnu(out: &PathBuf) -> bool {
