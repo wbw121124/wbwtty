@@ -12,6 +12,7 @@
 //!   → `frame::Parser` 拆帧 → [`Sink`] 分发；EXIT 帧 / 子进程死亡 = 正常收尾，
 //!   子进程仍活而断管 = 异常（`Sink::broken` → `read()` 报 `BrokenPipe`）。
 
+use std::env;
 use std::ffi::OsString;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
@@ -216,7 +217,16 @@ pub fn inject_dll(h_process: usize, dll_path: &Path) -> io::Result<()> {
 }
 
 /// build.rs 注入的 conhook.dll 路径；未构建/文件缺失 → 注入不可用（回退轮询）。
+/// mingw 目标下即使 DLL 存在也跳过注入（钩子在某些 mingw 环境下不稳定，
+/// 子进程会在第一次 WriteConsoleW 钩子调用后崩溃）。
 pub fn hook_dll_path() -> Option<&'static str> {
+    // mingw 目标：跳过注入，使用第一刀轮询路径
+    if matches!(
+        env::var("CARGO_CFG_TARGET_ENV").as_deref(),
+        Ok("gnu")
+    ) {
+        return None;
+    }
     let p = option_env!("WBWTTY_EARLY_HOOK_DLL")?;
     if p.is_empty() || !Path::new(p).exists() {
         None
