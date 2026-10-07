@@ -7,6 +7,7 @@
 /// 帧内 `len` 字段上限（含 type 字节）。
 pub const MAX_FRAME: usize = 1 * 1024 * 1024;
 /// 帧头长度（len 4B + type 1B）
+#[allow(dead_code)] // imp 第三刀接线使用
 pub const HDR_LEN: usize = 5;
 /// 协议版本（`HELLO.proto_ver`）
 pub const PROTO_VER: u16 = 1;
@@ -81,6 +82,7 @@ pub fn encode(typ: u8, payload: &[u8]) -> Result<Vec<u8>, ProtoError> {
 }
 
 /// `HELLO` payload（`ver u16 LE` + `flags u16 LE`）。
+#[allow(dead_code)] // imp 第三刀接线使用
 pub fn hello_payload(flags: u16) -> [u8; 4] {
     let mut b = [0u8; 4];
     b[0..2].copy_from_slice(&PROTO_VER.to_le_bytes());
@@ -97,6 +99,7 @@ pub fn resize_payload(cols: u16, rows: u16) -> [u8; 4] {
 }
 
 /// `EXIT` payload（`code i32 LE`）。
+#[allow(dead_code)] // imp 第三刀接线使用
 pub fn exit_payload(code: i32) -> [u8; 4] {
     code.to_le_bytes()
 }

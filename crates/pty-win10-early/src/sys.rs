@@ -69,8 +69,6 @@ pub const PIPE_READMODE_MESSAGE: DWORD = 0x0000_0002;
 pub const PIPE_WAIT: DWORD = 0x0000_0000;
 /// `ConnectNamedPipe`：连接已建立（客户端先连上时返回 TRUE+ERROR_PIPE_CONNECTED 视作成功）
 pub const ERROR_PIPE_CONNECTED: DWORD = 535;
-/// 管道对端已关闭（ReadFile/PeekNamedPipe 的正常断管）
-pub const ERROR_BROKEN_PIPE: DWORD = 109;
 /// 消息模式下缓冲不足（部分字节已读入，剩余下轮续读）
 pub const ERROR_MORE_DATA: DWORD = 234;
 /// `WaitForSingleObject`：无限等待
@@ -433,12 +431,6 @@ extern "system" {
         lpSecurityAttributes: *const SecurityAttributes,
     ) -> HANDLE;
     pub fn ConnectNamedPipe(hNamedPipe: HANDLE, lpOverlapped: LPVOID) -> BOOL;
-    pub fn SetNamedPipeHandleState(
-        hNamedPipe: HANDLE,
-        lpMode: *const DWORD,
-        lpMaxCollectionCount: *const DWORD,
-        lpCollectDataTimeout: *const DWORD,
-    ) -> BOOL;
     pub fn ReadFile(
         hFile: HANDLE,
         lpBuffer: LPVOID,
@@ -453,7 +445,6 @@ extern "system" {
         lpNumberOfBytesWritten: *mut DWORD,
         lpOverlapped: LPVOID,
     ) -> BOOL;
-    pub fn FlushFileBuffers(hFile: HANDLE) -> BOOL;
 }
 
 // user32：窗口控制 + WinEvent。必须显式 `#[link]`——MSVC 下 rust std 只链

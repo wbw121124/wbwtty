@@ -177,6 +177,12 @@ struct HandleAttrList {
     /// 逻辑上只经 `ptr` 使用，故允许“未读取”
     #[allow(dead_code)]
     buf: Vec<usize>,
+    /// `UpdateProcThreadAttribute(lpValue=...)` 指向的句柄数组。MSDN 仅对
+    /// 部分属性（如 IDEAL_PROCESSOR）注明“值须存活到列表销毁”，HANDLE_LIST
+    /// 未承诺拷贝——数组必须活过 `CreateProcessW`，否则属性列表读到已释放
+    /// 堆（Windows 表现为 CreateProcessW ERROR_INVALID_PARAMETER=87）。
+    #[allow(dead_code)] // 仅保活：读取方是 CreateProcessW（经属性列表）
+    arr: Vec<sys::HANDLE>,
     ptr: sys::LPVOID,
 }
 
@@ -214,9 +220,9 @@ impl HandleAttrList {
             unsafe { sys::DeleteProcThreadAttributeList(p) };
             return Err(e);
         }
-        // 注：`UpdateProcThreadAttribute` 对 HANDLE_LIST 拷贝句柄值而非存指针，
-        // arr 可以离开作用域；buf 必须活到 CreateProcessW 之后（Drop 删除）
-        Ok(Self { buf, ptr: p })
+        // 注：`arr` 随 Self 活到 `CreateProcessW` 之后（见结构体字段注释——
+        // HANDLE_LIST 值的拷贝语义未见文档承诺，不可提前释放）
+        Ok(Self { buf, arr, ptr: p })
     }
 }
 
@@ -474,11 +480,19 @@ impl EarlyPty {
                 &mut pi,
             )
         };
+        // 须在 drop(attr_list)（DeleteProcThreadAttributeList 可能改写线程最后
+        // 错误码）之前取错误，否则报出的可能是 Delete 的错误码而非真因
+        let create_err = (created == 0).then(|| io::Error::last_os_error());
         drop(attr_list); // CreateProcessW 已消费，立即释放属性列表
-        if created == 0 {
-            let e = io::Error::last_os_error();
+        if let Some(e) = create_err {
             release_console(h_in, h_out, false, &origin);
-            return Err(SpawnError::Spawn(format!("CreateProcessW: {e}")));
+            return Err(SpawnError::Spawn(format!(
+                "CreateProcessW: {e} [cmdline={} env_null={env_empty} cwd={} \
+                 flags=0x{flags:x} si_cb={} h_in={h_in:#x} h_out={h_out:#x}]",
+                String::from_utf16_lossy(&cmdline).trim_end_matches('\0'),
+                cwd_wide.is_some(),
+                si.StartupInfo.cb,
+            )));
         }
         unsafe { sys::CloseHandle(pi.hThread) };
 
