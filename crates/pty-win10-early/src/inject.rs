@@ -297,7 +297,12 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
             sys::PeekNamedPipe(h, ptr::null_mut(), 0, ptr::null_mut(), &mut avail, ptr::null_mut())
         };
         if ok == 0 {
-            eprintln!("[early-diag] read_loop: Peek failed (pipe likely broken)");
+            let err = io::Error::last_os_error();
+            eprintln!(
+                "[early-diag] read_loop: Peek failed err={:?} avail_was=? child_alive={}",
+                err,
+                unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) } != sys::WAIT_OBJECT_0
+            );
             break; // 对端关闭（正常断管）
         }
         if avail == 0 {
@@ -326,7 +331,16 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
                         match f {
                             Frame::VtData(b) => {
                                 vt_count += 1;
+                                eprintln!(
+                                    "[early-diag] read_loop: VT_DATA frame #{vt_count} len={}",
+                                    b.len()
+                                );
                                 sink.vt(b);
+                            }
+                            Frame::Hello { ver, flags } => {
+                                eprintln!(
+                                    "[early-diag] read_loop: HELLO ver={ver} flags={flags}"
+                                );
                             }
                             Frame::Exit { .. } => {
                                 eprintln!("[early-diag] read_loop: received EXIT frame → sink.exit()");

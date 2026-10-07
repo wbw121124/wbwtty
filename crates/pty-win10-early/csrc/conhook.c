@@ -23,8 +23,9 @@
 /* 不含 ucrt 头（stdio/stdlib/string）：SDK 矩阵把旧版 UCRT 头与 runner
  * 新版 UCRT corecrt_* 混编会直接语法爆炸（ci.yml /I 旧快照 ucrt 优先）。
  * stdarg/stdint 由编译器（VC 工具链）提供、stddef 旧快照内是纯 typedef，
- * 均安全；下列 7 个 CRT 函数改为手写等价声明（/MT 静态 ucrt / mingw CRT
- * 均按此符号链接）。 */
+ * 均安全；下列 7 个 CRT 函数改为手写等价声明。
+ * vsnprintf/snprintf 声明同时保证 mingw gcc（-static-libgcc 无 ucrt）
+ * 和 MSVC /MD（cl 隐式 int 声明与 ucrt 导出符号一致）可链接。 */
 void *malloc(size_t size);
 void free(void *ptr);
 void *memcpy(void *dst, const void *src, size_t n);

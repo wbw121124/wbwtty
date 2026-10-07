@@ -1,7 +1,7 @@
-/* early_proto.h 实现（纯 ucrt，供 7 版 SDK cl /c 编译验证）。最近更新：2026-10-06。 */
-/* 与 conhook.c 保持一致：不 include <stdio.h>（旧 SDK ucrt 头与新 SDK corecrt 混用会报错），
- * 但必须本地声明 vsnprintf/snprintf，否则 cl 隐式当成 int vsnprintf(...) 导致 LNK2001。
- * 声明放在 #include 之后，确保 stddef/stdarg 已定义 size_t/va_list。 */
+/* early_proto.h 实现（纯 ucrt，供 7 版 SDK cl /c 编译验证）。最近更新：2026-10-07。 */
+/* 不 include <stdio.h>（旧 SDK 与新版 corecrt_* 混编会报错）。
+ * vsnprintf/snprintf 本地声明：mingw gcc 需此声明才可编译；
+ * MSVC /MD 下 cl 会忽略本地声明转而链接 ucrt.lib 的正式实现，不影响链接。 */
 #include "early_proto.h"
 int vsnprintf(char *buf, size_t n, const char *fmt, va_list ap);
 int snprintf(char *buf, size_t n, const char *fmt, ...);
