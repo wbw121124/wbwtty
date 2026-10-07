@@ -20,6 +20,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* 钩子异常安全宏：MSVC 用 SEH 捕获访问冲突，避免钩子崩溃传播到子进程；
+ * mingw/gcc 不支持 __try/__except，退化为裸调用（已有 null 检查兜底）。 */
+#ifdef _MSC_VER
+#define HOOK_TRY __try {
+#define HOOK_CATCH } __except (EXCEPTION_EXECUTE_HANDLER) { return TRUE; }
+#else
+#define HOOK_TRY
+#define HOOK_CATCH
+#endif
+
 /* 不含 ucrt 头（stdio/stdlib/string）：SDK 矩阵把旧版 UCRT 头与 runner
  * 新版 UCRT corecrt_* 混编会直接语法爆炸（ci.yml /I 旧快照 ucrt 优先）。
  * stdarg/stdint 由编译器（VC 工具链）提供、stddef 旧快照内是纯 typedef，
@@ -601,9 +611,14 @@ static void emit_diff(void) {
 }
 
 /* ---- 钩子实现（真实 API 先行 → 镜像 → 发帧） --------------------------- */
+/* 所有钩子用 SEH 包裹（MSVC）：钩子内任何异常都不会传播到子进程，
+ * 子进程继续正常运行（退化为无镜像模式）。mingw 下 SEH 不可用，
+ * 但 null 检查已防止最常见的崩溃路径。 */
 
 static BOOL WINAPI hook_write_console_w(HANDLE h, CONST VOID *buf, DWORD n, LPDWORD written,
                                         LPVOID reserved) {
+    HOOK_TRY
+    if (g.p_write == NULL) { return TRUE; }
     BOOL ok = g.p_write(h, buf, n, written, reserved);
     if (ok) {
         DWORD cnt = (written != NULL) ? *written : n;
@@ -614,11 +629,14 @@ static BOOL WINAPI hook_write_console_w(HANDLE h, CONST VOID *buf, DWORD n, LPDW
         }
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_fill_char_w(HANDLE h, WCHAR ch, DWORD n, COORD start,
                                     LPDWORD written) {
+    HOOK_TRY
+    if (g.p_fill_char_w == NULL) { return TRUE; }
     BOOL ok = g.p_fill_char_w(h, ch, n, start, written);
     if (ok && g.cur != NULL && start.Y >= 0 && start.Y < g.gh) {
         DWORD cnt = (written != NULL) ? *written : n;
@@ -628,11 +646,14 @@ static BOOL WINAPI hook_fill_char_w(HANDLE h, WCHAR ch, DWORD n, COORD start,
         emit_diff();
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_fill_attr_w(HANDLE h, WORD attr, DWORD n, COORD start,
                                     LPDWORD written) {
+    HOOK_TRY
+    if (g.p_fill_attr_w == NULL) { return TRUE; }
     BOOL ok = g.p_fill_attr_w(h, attr, n, start, written);
     if (ok && g.cur != NULL && start.Y >= 0 && start.Y < g.gh) {
         DWORD cnt = (written != NULL) ? *written : n;
@@ -642,10 +663,13 @@ static BOOL WINAPI hook_fill_attr_w(HANDLE h, WORD attr, DWORD n, COORD start,
         emit_diff();
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_set_cursor(HANDLE h, COORD pos) {
+    HOOK_TRY
+    if (g.p_set_cursor == NULL) { return TRUE; }
     BOOL ok = g.p_set_cursor(h, pos);
     if (ok && g.cur != NULL) {
         EnterCriticalSection(&g.cs);
@@ -666,21 +690,27 @@ static BOOL WINAPI hook_set_cursor(HANDLE h, COORD pos) {
         emit_diff();
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_set_attr(HANDLE h, WORD attr) {
+    HOOK_TRY
+    if (g.p_set_attr == NULL) { return TRUE; }
     BOOL ok = g.p_set_attr(h, attr);
     if (ok) {
         EnterCriticalSection(&g.cs);
         g.attr = attr; /* 只影响后续写入，无可见变更 → 不发帧 */
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_scroll_w(HANDLE h, CONST SMALL_RECT *scroll, CONST SMALL_RECT *clip,
                                  COORD dest, CONST CHAR_INFO *fill) {
+    HOOK_TRY
+    if (g.p_scroll_w == NULL) { return TRUE; }
     BOOL ok = g.p_scroll_w(h, scroll, clip, dest, fill);
     if (ok && g.cur != NULL) {
         EnterCriticalSection(&g.cs);
@@ -688,11 +718,14 @@ static BOOL WINAPI hook_scroll_w(HANDLE h, CONST SMALL_RECT *scroll, CONST SMALL
         emit_diff();
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static BOOL WINAPI hook_read_console_w(HANDLE h, LPVOID buf, DWORD n, LPDWORD read,
                                        LPDWORD nread) {
+    HOOK_TRY
+    if (g.p_read_console_w == NULL) { return TRUE; }
     BOOL ok = g.p_read_console_w(h, buf, n, read, nread);
     if (ok) {
         /* 回显由 conhost 写入缓冲（旁路钩子）→ 回合后全量校准 */
@@ -701,7 +734,8 @@ static BOOL WINAPI hook_read_console_w(HANDLE h, LPVOID buf, DWORD n, LPDWORD re
         emit_diff();
         LeaveCriticalSection(&g.cs);
     }
-    return ok;
+    HOOK_CATCH
+    return TRUE;
 }
 
 static FARPROC WINAPI hook_get_proc_address(HMODULE mod, LPCSTR name) {

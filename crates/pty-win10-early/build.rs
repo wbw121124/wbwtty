@@ -107,27 +107,39 @@ fn build_msvc(out: &PathBuf) -> bool {
 }
 
 /// 用 vswhere 找最新 VS 安装路径（含 x86.x64 工具链）。
+/// 尝试多个常见路径以兼容不同 VS 安装方式（Community/Enterprise/BuildTools）。
 fn find_vs_install() -> Option<PathBuf> {
-    let vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
-    let out = Command::new(vswhere)
-        .args([
-            "-latest",
-            "-products", "*",
-            "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-            "-property", "installationPath",
-            "-nocatalog",
-        ])
-        .output();
-    match out {
-        Ok(o) if o.status.success() => {
-            let path = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if !path.is_empty() && Path::new(&path).exists() {
-                return Some(PathBuf::from(path));
-            }
-            None
+    let candidates = [
+        r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe",
+        r"C:\Program Files\Microsoft Visual Studio\Installer\vswhere.exe",
+    ];
+    for vswhere in &candidates {
+        if !Path::new(vswhere).exists() {
+            continue;
         }
-        _ => None,
+        let out = Command::new(vswhere)
+            .args([
+                "-latest",
+                "-products", "*",
+                "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                "-property", "installationPath",
+                "- sortBy", "installedOnDate descending",
+            ])
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                let path = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if !path.is_empty() && Path::new(&path).exists() {
+                    let vcvars = Path::new(&path).join("VC\\Auxiliary\\Build\\vcvars64.bat");
+                    if vcvars.exists() {
+                        return Some(PathBuf::from(path));
+                    }
+                }
+            }
+            _ => continue,
+        }
     }
+    None
 }
 
 fn build_gnu(out: &PathBuf) -> bool {
