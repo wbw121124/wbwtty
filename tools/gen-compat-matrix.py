@@ -76,6 +76,24 @@ CURATED_KERNEL: dict[str, list[str]] = {
         "AllocConsole", "SetConsoleCtrlHandler", "GetConsoleWindow",
         "GetConsoleProcessList",
     ],
+    # 阶段 4 早期桥接（路径 A 第一刀）：读屏 / 输入注入 / resize（min 1507）
+    "console-screen": [
+        "ReadConsoleOutputW", "GetConsoleScreenBufferInfo",
+    ],
+    "console-input": [
+        "WriteConsoleInputW",
+    ],
+    "console-resize": [
+        "SetConsoleScreenBufferSize", "SetConsoleWindowInfo",
+    ],
+    # 隐藏/最小化控制台窗口（配合 console-host 的 GetConsoleWindow；
+    # Win11 默认终端=WT 时枚举+最小化 CASCADIA 宿主窗口，见 src/host_win.rs）
+    "window-control": [
+        "ShowWindow", "IsWindowVisible", "IsIconic",
+        "EnumWindows", "GetClassNameW", "GetWindowTextW",
+        # 事件驱动压制（show/restore 瞬间回调，替代纯轮询延迟）
+        "SetWinEventHook", "UnhookWinEvent", "PeekMessageW",
+    ],
     "string": [
         "MultiByteToWideChar", "WideCharToMultiByte", "lstrlenW",
     ],

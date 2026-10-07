@@ -28,7 +28,8 @@ from pathlib import Path
 TARGET_CRATES = ["pty-win10-early", "pty-conpty"]
 SCAN_SUFFIXES = {".rs", ".c", ".h", ".cpp", ".hpp"}
 # PascalCase 调用但非 Win32 API 的本地例外（需要时追加，保持最小）
-ALLOW_LOCAL: set[str] = {"Some", "Ok", "Err", "Spawn", "BackendUnavailable"}
+ALLOW_LOCAL: set[str] = {"Some", "Ok", "Err", "Spawn", "BackendUnavailable",
+                         "Skip", "Items"}  # 本地枚举变体（input_vt::Parse）
 
 EXTERN_RE = re.compile(
     r'extern\s*"(?:system|C)"\s*\{', re.S)

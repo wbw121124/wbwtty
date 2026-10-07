@@ -5,6 +5,7 @@ members = [
     "crates/pty-core",
     "crates/pty-unix",
     "crates/pty-conpty",
+    "crates/pty-win10-early",
     "crates/term-input",
     "crates/term-render-gtk",
 ]

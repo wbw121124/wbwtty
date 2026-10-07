@@ -1,0 +1,9 @@
+[package]
+name = "pty-win10-early"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Windows 10 pre-1809 early PTY backend (console-API direct path); no-op stub elsewhere"
+
+[dependencies]
+pty-core = { path = "../pty-core" }

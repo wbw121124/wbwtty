@@ -296,6 +296,76 @@
       "min_sdk": "10.0.10240",
       "declared_in": "um/consoleapi3.h"
     },
+    "ReadConsoleOutputW": {
+      "group": "console-screen",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "GetConsoleScreenBufferInfo": {
+      "group": "console-screen",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "WriteConsoleInputW": {
+      "group": "console-input",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "SetConsoleScreenBufferSize": {
+      "group": "console-resize",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "SetConsoleWindowInfo": {
+      "group": "console-resize",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/consoleapi2.h"
+    },
+    "ShowWindow": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "IsWindowVisible": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "IsIconic": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "EnumWindows": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "GetClassNameW": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "GetWindowTextW": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "SetWinEventHook": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "UnhookWinEvent": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
+    "PeekMessageW": {
+      "group": "window-control",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/winuser.h"
+    },
     "MultiByteToWideChar": {
       "group": "string",
       "min_sdk": "10.0.10240",

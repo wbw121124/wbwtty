@@ -515,6 +515,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pty-win10-early"
+version = "0.1.0"
+dependencies = [
+ "pty-core",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -27,6 +27,20 @@
 - `GetConsoleWindow` — `um/consoleapi3.h`（min SDK 10.0.10240）
 - `SetConsoleCtrlHandler` — `um/consoleapi.h`（min SDK 10.0.10240）
 
+### console-input
+
+- `WriteConsoleInputW` — `um/consoleapi2.h`（min SDK 10.0.10240）
+
+### console-resize
+
+- `SetConsoleScreenBufferSize` — `um/consoleapi2.h`（min SDK 10.0.10240）
+- `SetConsoleWindowInfo` — `um/consoleapi2.h`（min SDK 10.0.10240）
+
+### console-screen
+
+- `GetConsoleScreenBufferInfo` — `um/consoleapi2.h`（min SDK 10.0.10240）
+- `ReadConsoleOutputW` — `um/consoleapi2.h`（min SDK 10.0.10240）
+
 ### error
 
 - `FormatMessageW` — `um/winbase.h`（min SDK 10.0.10240）
@@ -108,6 +122,10 @@
 - `VirtualAllocEx` — `um/memoryapi.h`（min SDK 10.0.10240）
 - `VirtualFreeEx` — `um/memoryapi.h`（min SDK 10.0.10240）
 - `WriteProcessMemory` — `um/memoryapi.h`（min SDK 10.0.10240）
+
+### window-control
+
+- `ShowWindow` — `um/winuser.h`（min SDK 10.0.10240）
 
 ## dynamic_only（必须动态加载）
 
