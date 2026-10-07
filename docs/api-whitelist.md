@@ -17,6 +17,17 @@
 
 ## static_allowed（静态可链接）
 
+### conhook
+
+- `DeleteCriticalSection` — `um/synchapi.h`（min SDK 10.0.10240）
+- `DisableThreadLibraryCalls` — `um/libloaderapi.h`（min SDK 10.0.10240）
+- `EnterCriticalSection` — `um/synchapi.h`（min SDK 10.0.10240）
+- `FreeLibraryAndExitThread` — `um/libloaderapi.h`（min SDK 10.0.10240）
+- `GetEnvironmentVariableW` — `um/processenv.h`（min SDK 10.0.10240）
+- `InitializeCriticalSection` — `um/synchapi.h`（min SDK 10.0.10240）
+- `LeaveCriticalSection` — `um/synchapi.h`（min SDK 10.0.10240）
+- `VirtualProtect` — `um/memoryapi.h`（min SDK 10.0.10240）
+
 ### console-host
 
 - `AllocConsole` — `um/consoleapi.h`（min SDK 10.0.10240）

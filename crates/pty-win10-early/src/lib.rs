@@ -14,12 +14,17 @@
 
 #[cfg(windows)]
 mod cmdline;
+/// 命名管道帧协议编解码（纯逻辑，跨平台编译 → 单测在全部 CI 平台跑）
+mod frame;
 #[cfg(windows)]
 mod host_win;
 #[cfg(windows)]
 mod imp;
 #[cfg(windows)]
 mod input_vt;
+#[cfg(windows)]
+#[allow(dead_code)] // 第二刀接线（imp 改造）完成前的增量模块
+mod inject;
 #[cfg(windows)]
 mod sys;
 #[cfg(windows)]

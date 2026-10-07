@@ -100,6 +100,15 @@ CURATED_KERNEL: dict[str, list[str]] = {
     "error": [
         "GetLastError", "SetLastError", "FormatMessageW",
     ],
+    # 阶段 4 第二刀 conhook.dll 运行时（注入的 DLL 内部：IAT 修补 +
+    # 线程同步 + 环境变量读取 + 加载器调用；全部 Win2000+ 声明面）
+    "conhook": [
+        "VirtualProtect",
+        "GetEnvironmentVariableW",
+        "InitializeCriticalSection", "EnterCriticalSection",
+        "LeaveCriticalSection", "DeleteCriticalSection",
+        "DisableThreadLibraryCalls", "FreeLibraryAndExitThread",
+    ],
 }
 
 # ConPTY：仅 17763+，必须动态加载，禁止静态链接

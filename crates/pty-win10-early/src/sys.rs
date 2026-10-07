@@ -53,6 +53,28 @@ pub const GENERIC_WRITE: DWORD = 0x4000_0000;
 pub const FILE_SHARE_READ: DWORD = 0x0000_0001;
 pub const FILE_SHARE_WRITE: DWORD = 0x0000_0002;
 pub const OPEN_EXISTING: DWORD = 3;
+/// `CreateProcessW`：子进程创建后挂起（第二刀注入窗口，winbase.h）
+pub const CREATE_SUSPENDED: DWORD = 0x0000_0004;
+/// `VirtualAllocEx`：MEM_COMMIT | MEM_RESERVE
+pub const MEM_COMMIT_RESERVE: DWORD = 0x0000_1000 | 0x0000_2000;
+/// `VirtualFreeEx`：MEM_RELEASE（dwSize 必须 0）
+pub const MEM_RELEASE: DWORD = 0x0000_8000;
+/// `VirtualAllocEx.flProtect`
+pub const PAGE_READWRITE: DWORD = 0x04;
+/// `CreateNamedPipeW.dwOpenMode`：双向
+pub const PIPE_ACCESS_DUPLEX: DWORD = 0x0000_0003;
+/// `CreateNamedPipeW.dwPipeMode`：消息型写 / 消息型读 / 阻塞
+pub const PIPE_TYPE_MESSAGE: DWORD = 0x0000_0004;
+pub const PIPE_READMODE_MESSAGE: DWORD = 0x0000_0002;
+pub const PIPE_WAIT: DWORD = 0x0000_0000;
+/// `ConnectNamedPipe`：连接已建立（客户端先连上时返回 TRUE+ERROR_PIPE_CONNECTED 视作成功）
+pub const ERROR_PIPE_CONNECTED: DWORD = 535;
+/// 管道对端已关闭（ReadFile/PeekNamedPipe 的正常断管）
+pub const ERROR_BROKEN_PIPE: DWORD = 109;
+/// 消息模式下缓冲不足（部分字节已读入，剩余下轮续读）
+pub const ERROR_MORE_DATA: DWORD = 234;
+/// `WaitForSingleObject`：无限等待
+pub const INFINITE: DWORD = 0xFFFF_FFFF;
 /// `CreateProcessW`：lpEnvironment 为 UTF-16 块
 pub const CREATE_UNICODE_ENVIRONMENT: DWORD = 0x0000_0400;
 /// `STARTUPINFO.dwFlags`：用 `hStdInput/hStdOutput/hStdError` 作子进程标准句柄
@@ -349,6 +371,89 @@ extern "system" {
         lpdwReturnedSize: *mut usize,
     ) -> BOOL;
     pub fn DeleteProcThreadAttributeList(lpAttributeList: LPVOID);
+
+    // ---- 加载器（loader 组；注入/反注入两侧共用） --------------------------
+    pub fn GetModuleHandleW(lpModuleName: *const u16) -> HANDLE;
+    pub fn GetProcAddress(hModule: HANDLE, lpProcName: *const u8) -> LPVOID;
+
+    // ---- 子进程线程退出码（process 组；注入后校验 LoadLibraryW 结果） ------
+    pub fn GetExitCodeThread(hThread: HANDLE, lpExitCode: *mut DWORD) -> BOOL;
+
+    // ---- 管道水位探测（file-pipe 组；读线程非阻塞轮询） --------------------
+    pub fn PeekNamedPipe(
+        hNamedPipe: HANDLE,
+        lpBuffer: LPVOID,
+        nBufferSize: DWORD,
+        lpBytesRead: *mut DWORD,
+        lpTotalBytesAvail: *mut DWORD,
+        lpBytesLeftThisMessage: *mut DWORD,
+    ) -> BOOL;
+
+    // ---- 第二刀注入（thread-injection / process 组，白名单静态链接） --------
+    pub fn VirtualAllocEx(
+        hProcess: HANDLE,
+        lpAddress: LPVOID,
+        dwSize: usize,
+        flAllocationType: DWORD,
+        flProtect: DWORD,
+    ) -> LPVOID;
+    pub fn VirtualFreeEx(
+        hProcess: HANDLE,
+        lpAddress: LPVOID,
+        dwSize: usize,
+        dwFreeType: DWORD,
+    ) -> BOOL;
+    pub fn WriteProcessMemory(
+        hProcess: HANDLE,
+        lpBaseAddress: LPVOID,
+        lpBuffer: LPCVOID,
+        nSize: usize,
+        lpNumberOfBytesWritten: *mut usize,
+    ) -> BOOL;
+    pub fn CreateRemoteThread(
+        hProcess: HANDLE,
+        lpThreadAttributes: LPVOID,
+        dwStackSize: usize,
+        lpStartAddress: LPVOID,
+        lpParameter: LPVOID,
+        dwCreationFlags: DWORD,
+        lpThreadId: *mut DWORD,
+    ) -> HANDLE;
+    pub fn ResumeThread(hThread: HANDLE) -> DWORD;
+
+    // ---- conhook 命名管道（file-pipe 组） ---------------------------------
+    pub fn CreateNamedPipeW(
+        lpName: *const u16,
+        dwOpenMode: DWORD,
+        dwPipeMode: DWORD,
+        nMaxInstances: DWORD,
+        nOutBufferSize: DWORD,
+        nInBufferSize: DWORD,
+        nDefaultTimeOut: DWORD,
+        lpSecurityAttributes: *const SecurityAttributes,
+    ) -> HANDLE;
+    pub fn ConnectNamedPipe(hNamedPipe: HANDLE, lpOverlapped: LPVOID) -> BOOL;
+    pub fn SetNamedPipeHandleState(
+        hNamedPipe: HANDLE,
+        lpMode: *const DWORD,
+        lpMaxCollectionCount: *const DWORD,
+        lpCollectDataTimeout: *const DWORD,
+    ) -> BOOL;
+    pub fn ReadFile(
+        hFile: HANDLE,
+        lpBuffer: LPVOID,
+        nNumberOfBytesToRead: DWORD,
+        lpNumberOfBytesRead: *mut DWORD,
+        lpOverlapped: LPVOID,
+    ) -> BOOL;
+    pub fn WriteFile(
+        hFile: HANDLE,
+        lpBuffer: LPCVOID,
+        nNumberOfBytesToWrite: DWORD,
+        lpNumberOfBytesWritten: *mut DWORD,
+        lpOverlapped: LPVOID,
+    ) -> BOOL;
+    pub fn FlushFileBuffers(hFile: HANDLE) -> BOOL;
 }
 
 // user32：窗口控制 + WinEvent。必须显式 `#[link]`——MSVC 下 rust std 只链

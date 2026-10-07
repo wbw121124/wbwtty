@@ -395,6 +395,46 @@
       "group": "error",
       "min_sdk": "10.0.10240",
       "declared_in": "um/winbase.h"
+    },
+    "VirtualProtect": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/memoryapi.h"
+    },
+    "GetEnvironmentVariableW": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/processenv.h"
+    },
+    "InitializeCriticalSection": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "EnterCriticalSection": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "LeaveCriticalSection": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "DeleteCriticalSection": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/synchapi.h"
+    },
+    "DisableThreadLibraryCalls": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
+    },
+    "FreeLibraryAndExitThread": {
+      "group": "conhook",
+      "min_sdk": "10.0.10240",
+      "declared_in": "um/libloaderapi.h"
     }
   },
   "dynamic_only": {
