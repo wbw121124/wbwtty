@@ -23,10 +23,11 @@
 /* 不含 ucrt 头（stdio/stdlib/string）：SDK 矩阵把旧版 UCRT 头与 runner
  * 新版 UCRT corecrt_* 混编会直接语法爆炸（ci.yml /I 旧快照 ucrt 优先）。
  * stdarg/stdint 由编译器（VC 工具链）提供、stddef 旧快照内是纯 typedef，
- * 均安全；下列 7 个 CRT 函数改为手写等价声明。
+ * 均安全；下列 CRT 函数改为手写等价声明。
  * vsnprintf/snprintf 声明同时保证 mingw gcc（-static-libgcc 无 ucrt）
  * 和 MSVC /MD（cl 隐式 int 声明与 ucrt 导出符号一致）可链接。 */
 void *malloc(size_t size);
+void *calloc(size_t nmemb, size_t size);
 void free(void *ptr);
 void *memcpy(void *dst, const void *src, size_t n);
 void *memset(void *dst, int c, size_t n);
@@ -860,22 +861,19 @@ static DWORD WINAPI worker(LPVOID unused) {
     g.pipe_dead = 0;
     LeaveCriticalSection(&g.cs);
 
-    EnterCriticalSection(&g.cs);
-    if (wbw_early_write_header(hello, WBWTTY_EARLY_T_HELLO, 4)) {
-        hello[5] = (uint8_t)(ver16 & 0xFFu);
-        hello[6] = (uint8_t)(ver16 >> 8);
-        hello[7] = (uint8_t)(flags16 & 0xFFu);
-        hello[8] = (uint8_t)(flags16 >> 8);
-        {
-            DWORD n = 0;
-            if (!WriteFile(g.pipe, hello, sizeof(hello), &n, NULL) || n != sizeof(hello)) {
-                g.pipe_dead = 1;
-            }
-        }
+    /* 发 HELLO；pipe_send_locked 内部持 cs，不可再外层套 cs（否则死锁） */
+    {
+        uint8_t hello_payload[4];
+        uint16_t ver16 = (uint16_t)WBWTTY_EARLY_PROTO_VER;
+        uint16_t flags16 = 0;
+        hello_payload[0] = (uint8_t)(ver16 & 0xFFu);
+        hello_payload[1] = (uint8_t)(ver16 >> 8);
+        hello_payload[2] = (uint8_t)(flags16 & 0xFFu);
+        hello_payload[3] = (uint8_t)(flags16 >> 8);
+        pipe_send_locked(WBWTTY_EARLY_T_HELLO, hello_payload, sizeof(hello_payload));
     }
     /* 连接即补一帧全量（钩子窗口期内的写入在这里送达前端） */
     emit_diff();
-    LeaveCriticalSection(&g.cs);
 
     for (;;) {
         DWORD avail = 0;
