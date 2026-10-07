@@ -19,9 +19,20 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+/* 不含 ucrt 头（stdio/stdlib/string）：SDK 矩阵把旧版 UCRT 头与 runner
+ * 新版 UCRT corecrt_* 混编会直接语法爆炸（ci.yml /I 旧快照 ucrt 优先）。
+ * stdarg/stdint 由编译器（VC 工具链）提供、stddef 旧快照内是纯 typedef，
+ * 均安全；下列 7 个 CRT 函数改为手写等价声明（/MT 静态 ucrt / mingw CRT
+ * 均按此符号链接）。 */
+void *malloc(size_t size);
+void free(void *ptr);
+void *memcpy(void *dst, const void *src, size_t n);
+void *memset(void *dst, int c, size_t n);
+int memcmp(const void *a, const void *b, size_t n);
+size_t strlen(const char *s);
+int vsnprintf(char *buf, size_t n, const char *fmt, va_list ap);
+int snprintf(char *buf, size_t n, const char *fmt, ...);
 
 #include "early_proto.h"
 
