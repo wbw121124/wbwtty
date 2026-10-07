@@ -125,7 +125,15 @@
 
 ### window-control
 
+- `EnumWindows` — `um/winuser.h`（min SDK 10.0.10240）
+- `GetClassNameW` — `um/winuser.h`（min SDK 10.0.10240）
+- `GetWindowTextW` — `um/winuser.h`（min SDK 10.0.10240）
+- `IsIconic` — `um/winuser.h`（min SDK 10.0.10240）
+- `IsWindowVisible` — `um/winuser.h`（min SDK 10.0.10240）
+- `PeekMessageW` — `um/winuser.h`（min SDK 10.0.10240）
+- `SetWinEventHook` — `um/winuser.h`（min SDK 10.0.10240）
 - `ShowWindow` — `um/winuser.h`（min SDK 10.0.10240）
+- `UnhookWinEvent` — `um/winuser.h`（min SDK 10.0.10240）
 
 ## dynamic_only（必须动态加载）
 

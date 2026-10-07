@@ -296,31 +296,6 @@ extern "system" {
     /// （宿主靠 spawn 时 `SetConsoleCtrlHandler(NULL, TRUE)` 忽略）
     pub fn GenerateConsoleCtrlEvent(dwCtrlEvent: DWORD, dwProcessGroupId: DWORD) -> BOOL;
 
-    pub fn ShowWindow(hWnd: HANDLE, nCmdShow: i32) -> BOOL;
-    pub fn IsWindowVisible(hWnd: HANDLE) -> BOOL;
-    pub fn IsIconic(hWnd: HANDLE) -> BOOL;
-    pub fn EnumWindows(lpEnumFunc: WndEnumProc, lParam: isize) -> BOOL;
-    pub fn GetClassNameW(hWnd: HANDLE, lpClassName: *mut u16, nMaxCount: i32) -> i32;
-    pub fn GetWindowTextW(hWnd: HANDLE, lpString: *mut u16, nMaxCount: i32) -> i32;
-
-    pub fn SetWinEventHook(
-        eventMin: DWORD,
-        eventMax: DWORD,
-        hmodWinEventProc: LPVOID,
-        pfnWinEventProc: WinEventProc,
-        idProcess: DWORD,
-        idThread: DWORD,
-        dwFlags: DWORD,
-    ) -> HANDLE;
-    pub fn UnhookWinEvent(hWinEventHook: HANDLE) -> BOOL;
-    pub fn PeekMessageW(
-        lpMsg: *mut Msg,
-        hWnd: HANDLE,
-        wMsgFilterMin: UINT,
-        wMsgFilterMax: UINT,
-        wRemoveMsg: UINT,
-    ) -> BOOL;
-
     pub fn GetConsoleScreenBufferInfo(
         hConsoleOutput: HANDLE,
         lpConsoleScreenBufferInfo: *mut ConsoleScreenBufferInfo,
@@ -374,6 +349,37 @@ extern "system" {
         lpdwReturnedSize: *mut usize,
     ) -> BOOL;
     pub fn DeleteProcThreadAttributeList(lpAttributeList: LPVOID);
+}
+
+// user32：窗口控制 + WinEvent。必须显式 `#[link]`——MSVC 下 rust std 只链
+// kernel32 等，不链 user32（windows-gnu 隐式有导入库，本机曾掩盖该问题，
+// CI 的 link.exe 会报 LNK2019 unresolved external）。
+#[link(name = "user32")]
+extern "system" {
+    pub fn ShowWindow(hWnd: HANDLE, nCmdShow: i32) -> BOOL;
+    pub fn IsWindowVisible(hWnd: HANDLE) -> BOOL;
+    pub fn IsIconic(hWnd: HANDLE) -> BOOL;
+    pub fn EnumWindows(lpEnumFunc: WndEnumProc, lParam: isize) -> BOOL;
+    pub fn GetClassNameW(hWnd: HANDLE, lpClassName: *mut u16, nMaxCount: i32) -> i32;
+    pub fn GetWindowTextW(hWnd: HANDLE, lpString: *mut u16, nMaxCount: i32) -> i32;
+
+    pub fn SetWinEventHook(
+        eventMin: DWORD,
+        eventMax: DWORD,
+        hmodWinEventProc: LPVOID,
+        pfnWinEventProc: WinEventProc,
+        idProcess: DWORD,
+        idThread: DWORD,
+        dwFlags: DWORD,
+    ) -> HANDLE;
+    pub fn UnhookWinEvent(hWinEventHook: HANDLE) -> BOOL;
+    pub fn PeekMessageW(
+        lpMsg: *mut Msg,
+        hWnd: HANDLE,
+        wMsgFilterMin: UINT,
+        wMsgFilterMax: UINT,
+        wRemoveMsg: UINT,
+    ) -> BOOL;
 }
 
 // ---- 结构布局回归测试（防止 repr(C) 手误） -----------------------------
