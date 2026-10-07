@@ -188,8 +188,20 @@ pub fn inject_dll(h_process: usize, dll_path: &Path) -> io::Result<()> {
             sys::VirtualFreeEx(h, remote, 0, sys::MEM_RELEASE);
             return Err(e);
         }
-        sys::WaitForSingleObject(th, sys::INFINITE);
+        // 注入线程挂起态（主模块尚未执行）中 LoadLibraryW 通常 <100ms；
+        // 加 15s 硬上限定防远程线程死锁/杀软拦截导致 spawn 永久阻塞。
+        let wait = sys::WaitForSingleObject(th, 15_000);
         let mut code: sys::DWORD = 0;
+        if wait != sys::WAIT_OBJECT_0 {
+            // 超时：线程可能仍在跑；强制关句柄并释放 path 内存（child 内部
+            // 已 Load 完毕则无泄漏，否则 ~4KB 泄漏可接受——远胜 spawn 永久 hang）
+            sys::CloseHandle(th);
+            sys::VirtualFreeEx(h, remote, 0, sys::MEM_RELEASE);
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "LoadLibraryW remote thread timeout (15s)",
+            ));
+        }
         sys::GetExitCodeThread(th, &mut code);
         sys::CloseHandle(th);
         sys::VirtualFreeEx(h, remote, 0, sys::MEM_RELEASE);
@@ -231,9 +243,11 @@ pub fn start_reader(
                 || io::Error::last_os_error().raw_os_error()
                     == Some(sys::ERROR_PIPE_CONNECTED as i32);
             if !connected || t_server.closed.load(Ordering::Acquire) {
+                eprintln!("[early-diag] reader connect failed (server closed={})", t_server.closed.load(Ordering::Acquire));
                 let _ = tx.send(false);
                 return;
             }
+            eprintln!("[early-diag] reader connected → starting frame loop");
             let _ = tx.send(true);
             read_loop(&t_server, sink, h_process);
         })?;
@@ -265,6 +279,7 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
     let mut clean = false;
     let mut chunk = vec![0u8; 64 * 1024];
     let mut ticks: u32 = 0;
+    let mut vt_count: u32 = 0;
     loop {
         // 每 ~100 次迭代（≤~600ms）探一次子进程：TerminateProcess 跳过
         // DllMain → 不会发 EXIT 帧，对端句柄也可能挂着 → 仅靠断管检测收
@@ -273,6 +288,7 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
             && unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
                 == sys::WAIT_OBJECT_0
         {
+            eprintln!("[early-diag] read_loop: child exited → sink.exit()");
             break; // 循环后 alive=false → sink.exit() 正常收尾
         }
         ticks = ticks.wrapping_add(1);
@@ -281,6 +297,7 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
             sys::PeekNamedPipe(h, ptr::null_mut(), 0, ptr::null_mut(), &mut avail, ptr::null_mut())
         };
         if ok == 0 {
+            eprintln!("[early-diag] read_loop: Peek failed (pipe likely broken)");
             break; // 对端关闭（正常断管）
         }
         if avail == 0 {
@@ -300,12 +317,19 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
         };
         if n > 0 {
             match parser.feed(&chunk[..n as usize]) {
-                Err(_) => break, // 协议错误（坏 len / 坏已知帧）= 断管语义
+                Err(e) => {
+                    eprintln!("[early-diag] read_loop: parser error: {e:?} → break");
+                    break; // 协议错误（坏 len / 坏已知帧）= 断管语义
+                }
                 Ok(frames) => {
                     for f in frames {
                         match f {
-                            Frame::VtData(b) => sink.vt(b),
+                            Frame::VtData(b) => {
+                                vt_count += 1;
+                                sink.vt(b);
+                            }
                             Frame::Exit { .. } => {
+                                eprintln!("[early-diag] read_loop: received EXIT frame → sink.exit()");
                                 clean = true;
                                 sink.exit();
                             }
@@ -321,15 +345,21 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
         if ok == 0
             && io::Error::last_os_error().raw_os_error() != Some(sys::ERROR_MORE_DATA as i32)
         {
+            eprintln!("[early-diag] read_loop: ReadFile failed (avail >0 but read err)");
             break;
         }
     }
     if !clean {
         let alive = unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
             != sys::WAIT_OBJECT_0;
+        eprintln!(
+            "[early-diag] read_loop: ended (clean={clean} vt_frames={vt_count} child_alive={alive})"
+        );
         if alive {
+            eprintln!("[early-diag] read_loop: → sink.broken()");
             sink.broken();
         } else {
+            eprintln!("[early-diag] read_loop: → sink.exit() (post-loop child-dead)");
             sink.exit(); // 子进程被杀（TerminateProcess 跳过 DllMain）→ 正常 eof
         }
     }

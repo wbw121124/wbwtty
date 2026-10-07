@@ -71,7 +71,8 @@ pub const PIPE_WAIT: DWORD = 0x0000_0000;
 pub const ERROR_PIPE_CONNECTED: DWORD = 535;
 /// 消息模式下缓冲不足（部分字节已读入，剩余下轮续读）
 pub const ERROR_MORE_DATA: DWORD = 234;
-/// `WaitForSingleObject`：无限等待
+/// `WaitForSingleObject`：无限等待；C 侧 conhook.worker 仍使用。
+#[allow(dead_code)]
 pub const INFINITE: DWORD = 0xFFFF_FFFF;
 /// `CreateProcessW`：lpEnvironment 为 UTF-16 块
 pub const CREATE_UNICODE_ENVIRONMENT: DWORD = 0x0000_0400;

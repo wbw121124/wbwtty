@@ -99,7 +99,7 @@ jobs:
             if [ "${{ runner.os }}" != "Linux" ]; then
               args="$args --exclude term-render-gtk"
             fi
-            cargo test $args
+            cargo test $args -- --nocapture
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
@@ -154,7 +154,7 @@ jobs:
           set -eu
           export PATH="$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"
           if [ -f Cargo.toml ]; then
-            cargo test --workspace --target x86_64-pc-windows-gnu
+            cargo test --workspace --target x86_64-pc-windows-gnu -- --nocapture
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
