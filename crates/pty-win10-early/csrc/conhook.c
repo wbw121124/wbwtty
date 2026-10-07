@@ -859,9 +859,10 @@ static DWORD WINAPI worker(LPVOID unused) {
     EnterCriticalSection(&g.cs);
     g.pipe = p;
     g.pipe_dead = 0;
-    LeaveCriticalSection(&g.cs);
-
-    /* 发 HELLO；pipe_send_locked 内部持 cs，不可再外层套 cs（否则死锁） */
+    /* HELLO + emit_diff 必须在同一 cs 持有期内完成：
+     * emit_diff 读取 g.cur/g.gw/g.gh，hooks 在 cs 内修改这些字段。
+     * 若 cs 在两者之间释放，hooks 可能在我们读取网格时修改它，
+     * 导致 emit_diff 访问无效指针并崩溃子进程。 */
     {
         uint8_t hello_payload[4];
         uint16_t ver16 = (uint16_t)WBWTTY_EARLY_PROTO_VER;
@@ -871,9 +872,9 @@ static DWORD WINAPI worker(LPVOID unused) {
         hello_payload[2] = (uint8_t)(flags16 & 0xFFu);
         hello_payload[3] = (uint8_t)(flags16 >> 8);
         pipe_send_locked(WBWTTY_EARLY_T_HELLO, hello_payload, sizeof(hello_payload));
+        emit_diff();
     }
-    /* 连接即补一帧全量（钩子窗口期内的写入在这里送达前端） */
-    emit_diff();
+    LeaveCriticalSection(&g.cs);
 
     for (;;) {
         DWORD avail = 0;
