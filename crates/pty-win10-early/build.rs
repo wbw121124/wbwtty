@@ -71,7 +71,7 @@ fn build_msvc(out: &PathBuf) -> bool {
          cd /d \"{out_dir}\"\r\n\
          call \"{vcvars}\"\r\n\
          if errorlevel 1 exit /b 1\r\n\
-         cl /nologo /LD /O2 /MD /Fe\"{dll}\" \"{s1}\" \"{s2}\"\r\n",
+         cl /nologo /utf-8 /LD /O2 /MD /Fe\"{dll}\" \"{s1}\" \"{s2}\" legacy_stdio_definitions.lib\r\n",
         out_dir = out_dir.display(),
         vcvars = vcvars.display(),
         dll = out.display(),
