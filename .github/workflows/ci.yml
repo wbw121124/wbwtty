@@ -105,6 +105,33 @@ jobs:
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
+      # 诊断：测试挂死/中止后 cmd.exe 常以孤儿残留（watchdog abort 只杀测试进程）。
+      # 失败时用 cdb 附着打印全部线程栈 + 锁持有者 → 定位子进程卡死点
+      # （卡在 p_write/conhost、EnterCriticalSection、还是钩子外）。
+      - name: Dump wedged child stacks (cdb)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
+          if (-not (Test-Path $cdb)) {
+            Write-Host "::warning::cdb.exe not found — skipping stack dump"
+            exit 0
+          }
+          $targets = @()
+          foreach ($name in @('cmd.exe', 'conhost.exe')) {
+            $targets += @(Get-Process $name -ErrorAction SilentlyContinue |
+              Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-15) })
+          }
+          if ($targets.Count -eq 0) {
+            Write-Host "no recent cmd.exe/conhost.exe to dump"
+            exit 0
+          }
+          foreach ($p in $targets) {
+            Write-Host "=== $($p.ProcessName) pid=$($p.Id) start=$($p.StartTime.ToString('o')) ==="
+            try { Write-Host "cmdline: $((Get-CimInstance Win32_Process -Filter "ProcessId = $($p.Id)").CommandLine)" } catch {}
+            & $cdb -p $p.Id -c ".effmach; ~*k; !locks; qd" 2>&1 | ForEach-Object { "$_" }
+          }
+          exit 0
 
   # ---------- GTK 渲染器在 Windows 上的构建（MSYS2 ucrt64 + rustup windows-gnu 目标） ----------
   # 与 build-test 的区别：本 job 提供 GTK3/pkg-config 开发包，term-render-gtk 不排除，

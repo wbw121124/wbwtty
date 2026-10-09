@@ -315,6 +315,15 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
     let mut vt_count: u32 = 0;
     let mut hello = false;
     let diag = diag_enabled();
+    // 子进程退出码（诊断钩子后崩溃归因：AV=0xC0000005 failfast=0xC0000409 等）
+    let child_exit = || -> Option<u32> {
+        let mut code: sys::DWORD = 0;
+        if unsafe { sys::GetExitCodeProcess(h_process as sys::HANDLE, &mut code) } != 0 {
+            Some(code)
+        } else {
+            None
+        }
+    };
     loop {
         // 每 ~100 次迭代（≤~600ms）探一次子进程：TerminateProcess 跳过
         // DllMain → 不会发 EXIT 帧，对端句柄也可能挂着 → 仅靠断管检测收
@@ -324,7 +333,10 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
                 == sys::WAIT_OBJECT_0
         {
             if diag {
-                eprintln!("[early-diag] read_loop: child exited (vt={vt_count} hello={hello})");
+                eprintln!(
+                    "[early-diag] read_loop: child exited (exit={:#010x} vt={vt_count} hello={hello})",
+                    child_exit().unwrap_or(0xFFFF_FFFF)
+                );
             }
             break; // 循环后 alive=false → sink.exit() 正常收尾
         }
@@ -413,8 +425,13 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
         let alive = unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
             != sys::WAIT_OBJECT_0;
         if diag {
+            let code = if alive {
+                String::from("STILL_ACTIVE")
+            } else {
+                format!("{:#010x}", child_exit().unwrap_or(0xFFFF_FFFF))
+            };
             eprintln!(
-                "[early-diag] read_loop: end → sink.{} (vt={vt_count} hello={hello} child_alive={alive})",
+                "[early-diag] read_loop: end → sink.{} (exit={code} vt={vt_count} hello={hello} child_alive={alive})",
                 if alive { "broken" } else { "exit" }
             );
         }
