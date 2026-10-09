@@ -1,7 +1,8 @@
 //! 构建 conhook.dll（第二刀注入的子进程钩子，`csrc/conhook.c` + `early_proto.c`）。
 //!
-//! - MSVC：通过 vswhere 定位 VS 安装 → 调用 vcvarsall.bat 设置环境 → `cl /LD /O2 /MD`
-//!   `/MD` 动态链接 ucrt.dll（自带完整 vsnprintf/snprintf）。
+//! - MSVC：vswhere 定位 VS 安装 → 写辅助 bat（`cd OUT_DIR` + `call vcvars64.bat`
+//!   + `cl /LD /O2 /MD`，同会话内环境不丢失，也避开 cmd 内嵌引号的转义陷阱）→
+//!   `cmd /C` 执行；`/MD` 动态链接 ucrt.dll（自带完整 vsnprintf/snprintf）。
 //! - GNU（msys2）：`gcc -shared -static-libgcc`；
 //! - 任一路径失败 → 不设 `WBWTTY_EARLY_HOOK_DLL` → `inject::hook_dll_path()`
 //!   返回 `None` → 注入禁用，spawn 自动回退第一刀轮询（降级不报错）。
@@ -41,7 +42,9 @@ fn main() {
     }
 }
 
-/// 用 vswhere 找 VS 安装，调 vcvarsall.bat 设置 INCLUDE/LIB/PATH，再 invoke cl。
+/// 用 vswhere 找 VS 安装，再通过辅助 bat 在同一 cmd 会话里
+/// `call vcvars64.bat` 后直接 `cl`（环境只活在该 cmd 进程内，
+/// 无法回传给外部进程）。
 fn build_msvc(out: &PathBuf) -> bool {
     let vs_path = match find_vs_install() {
         Some(p) => p,
@@ -58,51 +61,32 @@ fn build_msvc(out: &PathBuf) -> bool {
         ));
         return false;
     }
-    // 先跑 vcvarsall 把 env 设好，再从 PATH 拿 cl
-    let vcvars_out = match Command::new("cmd")
-        .args(["/C", vcvars.to_string_lossy().as_ref()])
-        .output()
-    {
-        Ok(o) if o.status.success() => o,
-        result => {
-            match result {
-                Ok(o) => {
-                    warning(&format!(
-                        "conhook: vcvars64.bat exited {}; injection disabled",
-                        o.status
-                    ));
-                    emit_output("vcvars", "stderr", &o.stderr);
-                }
-                Err(e) => {
-                    warning(&format!(
-                        "conhook: vcvars64.bat failed to start ({e}); injection disabled"
-                    ));
-                }
-            }
-            return false;
-        }
-    };
-    // 解析 vcvars 输出的 SET 变量，合并到当前环境
-    let mut cmd = Command::new("cl");
-    for line in String::from_utf8_lossy(&vcvars_out.stdout).lines() {
-        if let Some((k, v)) = line.split_once('=') {
-            if k.starts_with("SET ") {
-                let k = &k["SET ".len()..];
-                cmd.env(k, v);
-            }
-        }
+    let out_dir = out.parent().expect("OUT_DIR");
+    // 辅助 bat 写入文件：含空格/引号的路径经 Rust Command 传给 cmd /C
+    // 会被 \" 转义，cmd 不认这种转义 → 必须避开命令行内嵌引号。
+    let crate_dir = env::current_dir().expect("cwd");
+    let script = out_dir.join("conhook-build.bat");
+    let bat = format!(
+        "@echo off\r\n\
+         cd /d \"{out_dir}\"\r\n\
+         call \"{vcvars}\"\r\n\
+         if errorlevel 1 exit /b 1\r\n\
+         cl /nologo /LD /O2 /MD /Fe\"{dll}\" \"{s1}\" \"{s2}\"\r\n",
+        out_dir = out_dir.display(),
+        vcvars = vcvars.display(),
+        dll = out.display(),
+        s1 = crate_dir.join("csrc\\conhook.c").display(),
+        s2 = crate_dir.join("csrc\\early_proto.c").display(),
+    );
+    if let Err(e) = std::fs::write(&script, bat) {
+        warning(&format!(
+            "conhook: cannot write {}: {e}; injection disabled",
+            script.display()
+        ));
+        return false;
     }
-    // 同时确保 PATH 包含 cl.exe 所在目录
-    cmd.args([
-        "/nologo",
-        "/LD",
-        "/O2",
-        "/MD",
-    ]);
-    cmd.arg(format!("/Fo{}", out.parent().unwrap().display()));
-    cmd.arg(format!("/Fe{}", out.display()));
-    cmd.arg("csrc/conhook.c");
-    cmd.arg("csrc/early_proto.c");
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C").arg(&script);
     run(cmd, "cl")
 }
 
@@ -123,7 +107,6 @@ fn find_vs_install() -> Option<PathBuf> {
                 "-products", "*",
                 "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
                 "-property", "installationPath",
-                "- sortBy", "installedOnDate descending",
             ])
             .output();
         match out {
@@ -136,7 +119,16 @@ fn find_vs_install() -> Option<PathBuf> {
                     }
                 }
             }
-            _ => continue,
+            Ok(o) => {
+                warning(&format!(
+                    "conhook: vswhere exited {} ({})",
+                    o.status,
+                    vswhere
+                ));
+                emit_output("vswhere", "stdout", &o.stdout);
+                emit_output("vswhere", "stderr", &o.stderr);
+            }
+            Err(e) => warning(&format!("conhook: vswhere failed to start ({e})")),
         }
     }
     None
