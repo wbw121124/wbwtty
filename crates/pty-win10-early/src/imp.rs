@@ -575,15 +575,6 @@ impl EarlyPty {
 
         // 6) 子进程已生成（继承到 ignore=FALSE）→ 现在才给宿主置忽略，
         //    否则 Interrupt 广播会杀死宿主自身；失败即 fail-fast
-        eprintln!(
-            "[early-diag] spawn inject={:?}",
-            injected.as_ref().map(|r| {
-                match r {
-                    Ok(()) => "ok".to_string(),
-                    Err(e) => format!("ERR({e})"),
-                }
-            })
-        );
         if unsafe { sys::SetConsoleCtrlHandler(None, 1) } == 0 {
             let e = io::Error::last_os_error();
             unsafe {
@@ -619,25 +610,15 @@ impl EarlyPty {
                 Some(Ok(())) => {
                     let sink: Arc<dyn Sink> =
                         Arc::new(SharedSink { shared: shared.clone() });
-                    eprintln!("[early-diag] spawn start_reader(5s)...");
-                    match inject::start_reader(srv, sink, h_process, PIPE_CONNECT_TIMEOUT) {
-                        Ok(h) => {
-                            eprintln!("[early-diag] spawn reader connected → pipe mode");
-                            reader = Some(h);
-                            piped = true;
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "[early-diag] spawn start_reader failed: {e} → fallback poll"
-                            );
-                        }
+                    if let Ok(h) =
+                        inject::start_reader(srv, sink, h_process, PIPE_CONNECT_TIMEOUT)
+                    {
+                        reader = Some(h);
+                        piped = true;
                     }
                 }
                 _ => {
                     srv.close_now();
-                    eprintln!(
-                        "[early-diag] spawn inject failed → close pipe → fallback poll"
-                    );
                 }
             }
         }
