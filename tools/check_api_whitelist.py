@@ -32,6 +32,7 @@ ALLOW_LOCAL: set[str] = {"Some", "Ok", "Err", "Spawn", "BackendUnavailable",
                          "Skip", "Items",  # 本地枚举变体（input_vt::Parse）
                          "BadLen", "VersionMismatch", "VtData",  # frame 协议枚举变体
                          "DllMain",  # conhook.dll 入口（本模块定义，非导入 API）
+                         "AssertUnwindSafe",  # std::panic 防护（reader 线程兜底）
                          "BOOL", "FARPROC"}  # Windows 类型名（函数指针 typedef 返回型），非调用
 
 EXTERN_RE = re.compile(

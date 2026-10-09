@@ -15,16 +15,29 @@
 use std::ffi::OsString;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::frame::{self, Frame, Parser};
 use crate::sys;
+
+/// 诊断日志开关：`WBWTTY_EARLY_LOG=1` 时输出 `[early-diag]`（CI 调试用；
+/// 默认静默，测试框架捕获输出不受影响）。
+pub(crate) fn diag_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        matches!(
+            std::env::var("WBWTTY_EARLY_LOG").as_deref(),
+            Ok("1") | Ok("true")
+        )
+    })
+}
 
 /// conhook 读取管道名的环境变量（宿主写入子进程环境块）。
 pub const PIPE_ENV: &str = "WBWTTY_EARLY_PIPE";
@@ -249,11 +262,27 @@ pub fn start_reader(
                 || io::Error::last_os_error().raw_os_error()
                     == Some(sys::ERROR_PIPE_CONNECTED as i32);
             if !connected || t_server.closed.load(Ordering::Acquire) {
+                if diag_enabled() {
+                    eprintln!(
+                        "[early-diag] reader: connect failed (closed={})",
+                        t_server.closed.load(Ordering::Acquire)
+                    );
+                }
                 let _ = tx.send(false);
                 return;
             }
             let _ = tx.send(true);
-            read_loop(&t_server, sink, h_process);
+            // reader 线程绝不能无声死亡：panic → 兜底 broken，让 read() 立即
+            // 报 BrokenPipe（而非永久阻塞），并把 panic 原因打印出来。
+            let sink_for_loop = sink.clone();
+            let panicked = catch_unwind(AssertUnwindSafe(|| {
+                read_loop(&t_server, sink_for_loop, h_process);
+            }))
+            .is_err();
+            if panicked {
+                eprintln!("[early-diag] reader: read_loop PANICKED → sink.broken()");
+                sink.broken();
+            }
         })?;
     match rx.recv_timeout(timeout) {
         Ok(true) => Ok(th),
@@ -283,6 +312,9 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
     let mut clean = false;
     let mut chunk = vec![0u8; 64 * 1024];
     let mut ticks: u32 = 0;
+    let mut vt_count: u32 = 0;
+    let mut hello = false;
+    let diag = diag_enabled();
     loop {
         // 每 ~100 次迭代（≤~600ms）探一次子进程：TerminateProcess 跳过
         // DllMain → 不会发 EXIT 帧，对端句柄也可能挂着 → 仅靠断管检测收
@@ -291,6 +323,9 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
             && unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
                 == sys::WAIT_OBJECT_0
         {
+            if diag {
+                eprintln!("[early-diag] read_loop: child exited (vt={vt_count} hello={hello})");
+            }
             break; // 循环后 alive=false → sink.exit() 正常收尾
         }
         ticks = ticks.wrapping_add(1);
@@ -299,6 +334,12 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
             sys::PeekNamedPipe(h, ptr::null_mut(), 0, ptr::null_mut(), &mut avail, ptr::null_mut())
         };
         if ok == 0 {
+            if diag {
+                eprintln!(
+                    "[early-diag] read_loop: Peek err={:?} (vt={vt_count} hello={hello})",
+                    io::Error::last_os_error()
+                );
+            }
             break; // 对端关闭（正常断管）
         }
         if avail == 0 {
@@ -318,17 +359,35 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
         };
         if n > 0 {
             match parser.feed(&chunk[..n as usize]) {
-                Err(_) => {
+                Err(e) => {
+                    if diag {
+                        eprintln!("[early-diag] read_loop: parser error {e:?} → break");
+                    }
                     break; // 协议错误（坏 len / 坏已知帧）= 断管语义
                 }
                 Ok(frames) => {
                     for f in frames {
                         match f {
                             Frame::VtData(b) => {
+                                vt_count += 1;
+                                if diag && vt_count <= 3 {
+                                    eprintln!(
+                                        "[early-diag] read_loop: VT_DATA #{vt_count} len={}",
+                                        b.len()
+                                    );
+                                }
                                 sink.vt(b);
                             }
-                            Frame::Hello { .. } => {}
+                            Frame::Hello { .. } => {
+                                hello = true;
+                                if diag {
+                                    eprintln!("[early-diag] read_loop: HELLO received");
+                                }
+                            }
                             Frame::Exit { .. } => {
+                                if diag {
+                                    eprintln!("[early-diag] read_loop: EXIT frame");
+                                }
                                 clean = true;
                                 sink.exit();
                             }
@@ -344,12 +403,21 @@ fn read_loop(server: &PipeServer, sink: Arc<dyn Sink>, h_process: usize) {
         if ok == 0
             && io::Error::last_os_error().raw_os_error() != Some(sys::ERROR_MORE_DATA as i32)
         {
+            if diag {
+                eprintln!("[early-diag] read_loop: ReadFile err={:?}", io::Error::last_os_error());
+            }
             break;
         }
     }
     if !clean {
         let alive = unsafe { sys::WaitForSingleObject(h_process as sys::HANDLE, 0) }
             != sys::WAIT_OBJECT_0;
+        if diag {
+            eprintln!(
+                "[early-diag] read_loop: end → sink.{} (vt={vt_count} hello={hello} child_alive={alive})",
+                if alive { "broken" } else { "exit" }
+            );
+        }
         if alive {
             sink.broken();
         } else {

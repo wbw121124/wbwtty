@@ -606,18 +606,40 @@ impl EarlyPty {
                 release_console(h_in, h_out, true, &origin);
                 return Err(SpawnError::Spawn(format!("ResumeThread: {e}")));
             }
+            let diag = inject::diag_enabled();
+            if diag {
+                eprintln!(
+                    "[early-diag] spawn: inject={:?}",
+                    match &injected {
+                        Some(Ok(())) => "ok".to_string(),
+                        Some(Err(e)) => format!("ERR({e})"),
+                        None => "skipped(no dll/server)".to_string(),
+                    }
+                );
+            }
             match injected {
                 Some(Ok(())) => {
                     let sink: Arc<dyn Sink> =
                         Arc::new(SharedSink { shared: shared.clone() });
-                    if let Ok(h) =
-                        inject::start_reader(srv, sink, h_process, PIPE_CONNECT_TIMEOUT)
-                    {
-                        reader = Some(h);
-                        piped = true;
+                    match inject::start_reader(srv, sink, h_process, PIPE_CONNECT_TIMEOUT) {
+                        Ok(h) => {
+                            if diag {
+                                eprintln!("[early-diag] spawn: reader connected → PIPE mode");
+                            }
+                            reader = Some(h);
+                            piped = true;
+                        }
+                        Err(e) => {
+                            if diag {
+                                eprintln!("[early-diag] spawn: start_reader failed: {e} → poll");
+                            }
+                        }
                     }
                 }
                 _ => {
+                    if diag {
+                        eprintln!("[early-diag] spawn: no injection → close pipe → poll");
+                    }
                     srv.close_now();
                 }
             }
@@ -688,6 +710,8 @@ impl Pty for EarlyPty {
         if buf.is_empty() {
             return Ok(0);
         }
+        let diag = inject::diag_enabled();
+        let mut silent: u32 = 0;
         let mut q = self.shared.q.lock().unwrap_or_else(|e| e.into_inner());
         loop {
             if !q.bytes.is_empty() {
@@ -707,7 +731,30 @@ impl Pty for EarlyPty {
                     "conhook pipe broken (child alive)",
                 ));
             }
-            q = self.shared.cv.wait(q).unwrap_or_else(|e| e.into_inner());
+            // 1s 超时唤醒：避免调用方 deadline 永远无法生效（reader 静默挂死
+            // 时无限期阻塞）；>5s 静默则打印状态供诊断。
+            let (g, timeout) = self
+                .shared
+                .cv
+                .wait_timeout(q, Duration::from_secs(1))
+                .unwrap_or_else(|e| e.into_inner());
+            q = g;
+            if timeout.timed_out() {
+                silent += 1;
+                if diag && silent >= 5 {
+                    let alive = unsafe {
+                        sys::WaitForSingleObject(self.h_process as sys::HANDLE, 0)
+                    } != sys::WAIT_OBJECT_0;
+                    eprintln!(
+                        "[early-diag] read: silent {silent}s eof={} bytes={} child_alive={}",
+                        q.eof,
+                        q.bytes.len(),
+                        alive
+                    );
+                }
+            } else {
+                silent = 0;
+            }
         }
     }
 

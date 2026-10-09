@@ -93,13 +93,15 @@ jobs:
           fi
       - name: Test workspace
         shell: bash
+        env:
+          WBWTTY_EARLY_LOG: "1"
         run: |
           if [ -f Cargo.toml ]; then
             args="--workspace"
             if [ "${{ runner.os }}" != "Linux" ]; then
               args="$args --exclude term-render-gtk"
             fi
-            cargo test $args
+            cargo test $args -- --nocapture
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
@@ -150,11 +152,13 @@ jobs:
             echo "workspace not created yet (stage 0) — skipping"
           fi
       - name: Test workspace (ucrt64)
+        env:
+          WBWTTY_EARLY_LOG: "1"
         run: |
           set -eu
           export PATH="$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}")/bin:$PATH"
           if [ -f Cargo.toml ]; then
-            cargo test --workspace --target x86_64-pc-windows-gnu
+            cargo test --workspace --target x86_64-pc-windows-gnu -- --nocapture
           else
             echo "workspace not created yet (stage 0) — skipping"
           fi
